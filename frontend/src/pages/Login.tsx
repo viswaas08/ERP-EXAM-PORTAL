@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowRight, BarChart3, Building2, FileCheck2, GraduationCap, ShieldCheck, TicketCheck, UsersRound } from "lucide-react";
+import { ArrowRight, BarChart3, Building2, Eye, EyeOff, FileCheck2, GraduationCap, ShieldCheck, TicketCheck, UsersRound } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button, Card, Input } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
@@ -9,6 +9,7 @@ export function Login() {
   const [password, setPassword] = useState("Password@123");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -22,7 +23,8 @@ export function Login() {
       const user = await login(email, password);
       navigate(user.role === "Candidate" ? "/candidate" : destination, { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      const message = err instanceof Error ? err.message : "Login failed";
+      setError(message.includes("Invalid credentials") ? "The email and password do not match. Use the password entered during registration." : message);
     } finally {
       setLoading(false);
     }
@@ -75,7 +77,12 @@ export function Login() {
             </div>
             <form className="space-y-3" onSubmit={handleSubmit}>
               <Input placeholder="Email" value={email} onChange={(event) => setEmail(event.target.value)} />
-              <Input placeholder="Password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+              <div className="relative">
+                <Input className="pr-11" placeholder="Password" type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} />
+                <button className="absolute inset-y-0 right-0 grid w-11 place-items-center text-slate-500" type="button" onClick={() => setShowPassword((value) => !value)} title={showPassword ? "Hide password" : "Show password"}>
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
               {error && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
               <Button className="w-full" disabled={loading}>{loading ? "Signing in..." : "Login"} <ArrowRight size={18} /></Button>
             </form>
