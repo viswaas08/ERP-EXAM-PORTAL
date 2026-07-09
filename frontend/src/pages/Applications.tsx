@@ -2,32 +2,44 @@ import { Download, Eye, Filter, RotateCcw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, Input, Select, Table } from "../components/ui";
 import { api } from "../lib/api";
+import { usePersistentState } from "../lib/usePersistentState";
 
 type ApplicationRow = {
   id: string;
   applicationNo: string;
   status: string;
-  candidate: { user: { name: string }; profile?: { category?: string; state?: string; percentage?: number } | null };
-  examination: { code: string; name: string };
+  candidate: { user: { name: string; email?: string }; profile?: { phone?: string; category?: string; qualification?: string; state?: string; district?: string; percentage?: number } | null };
+  examination: { id: string; code: string; name: string };
+  documents?: Array<{ type: string; status: string }>;
 };
 
 export function Applications() {
   const [rows, setRows] = useState<ApplicationRow[]>([]);
   const [query, setQuery] = useState("");
-  const [examFilter, setExamFilter] = useState("All Exams");
+  const [examFilter, setExamFilter] = usePersistentState("examPortal.admin.selectedExamCode", "All Exams");
+  const [selectedExamId] = usePersistentState<string | undefined>("examPortal.examinations.selectedExamId", undefined);
   const [status, setStatus] = useState("All Statuses");
   const [selectedId, setSelectedId] = useState("");
   const [notice, setNotice] = useState("Applications load from the database.");
 
-  useEffect(() => {
-    api<ApplicationRow[]>("/applications")
+  function loadApplications() {
+    const queryString = selectedExamId ? `?examId=${encodeURIComponent(selectedExamId)}` : "";
+    api<ApplicationRow[]>(`/applications${queryString}`)
       .then((data) => {
         setRows(data);
         setSelectedId(data[0]?.id ?? "");
-        setNotice(`${data.length} database application(s) loaded.`);
+        setNotice(`${data.length} database application(s) loaded${selectedExamId ? " for the selected examination" : ""}.`);
       })
       .catch((error) => setNotice(error instanceof Error ? error.message : "Could not load applications."));
+  }
+
+  useEffect(() => {
+    loadApplications();
   }, []);
+
+  useEffect(() => {
+    loadApplications();
+  }, [selectedExamId]);
 
   const filteredRows = useMemo(() => rows.filter((app) => {
     const text = `${app.applicationNo} ${app.candidate.user.name}`.toLowerCase();
@@ -63,9 +75,9 @@ export function Applications() {
   return (
     <section className="space-y-5">
       <Card className="border-l-4 border-l-primary py-3 text-sm font-medium">{notice}</Card>
-      <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">Application Management</h1><p className="text-sm text-slate-500">Database-backed application review and export.</p></div><Button onClick={exportCsv}><Download size={18} /> Export</Button></div>
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">Application Management</h1><p className="text-sm text-slate-500">Review candidate applications per selected examination.</p></div><Button onClick={exportCsv}><Download size={18} /> Export</Button></div>
       <Card className="grid gap-3 md:grid-cols-5"><Input placeholder="Search candidate" value={query} onChange={(event) => setQuery(event.target.value)} /><Select value={examFilter} onChange={(event) => setExamFilter(event.target.value)}><option>All Exams</option>{[...new Set(rows.map((app) => app.examination.code))].map((code) => <option key={code}>{code}</option>)}</Select><Select value={status} onChange={(event) => setStatus(event.target.value)}><option>All Statuses</option><option>PENDING</option><option>APPROVED</option><option>RETURNED</option><option>REJECTED</option><option>HOLD</option></Select><Button className="bg-secondary" onClick={() => setNotice(`${filteredRows.length} application(s) found.`)}><Filter size={18} /> Filter</Button></Card>
-      {selected && <Card><h2 className="mb-2 font-semibold">Review Panel</h2><p className="text-sm">{selected.candidate.user.name} · {selected.applicationNo} · {selected.examination.code} · Current status: <strong>{selected.status}</strong></p><div className="mt-3 flex flex-wrap gap-2"><Button className="bg-emerald-600" onClick={() => updateStatus(selected.id, "APPROVED")}>Approve</Button><Button className="bg-destructive" onClick={() => updateStatus(selected.id, "REJECTED")}>Reject</Button><Button className="bg-secondary" onClick={() => updateStatus(selected.id, "RETURNED")}>Return For Correction</Button></div></Card>}
+      {selected && <Card><h2 className="mb-2 font-semibold">Review Panel</h2><p className="text-sm">{selected.candidate.user.name} | {selected.applicationNo} | {selected.examination.code} | Current status: <strong>{selected.status}</strong></p><div className="mt-3 grid gap-2 text-sm md:grid-cols-4"><p><strong>Email:</strong> {selected.candidate.user.email ?? "Not available"}</p><p><strong>Category:</strong> {selected.candidate.profile?.category ?? "Not set"}</p><p><strong>Qualification:</strong> {selected.candidate.profile?.qualification ?? "Not set"}</p><p><strong>District:</strong> {selected.candidate.profile?.district ?? "Not set"}</p><p><strong>Percentage:</strong> {selected.candidate.profile?.percentage ?? 0}</p><p><strong>Documents:</strong> {selected.documents?.length ?? 0}</p></div><div className="mt-3 flex flex-wrap gap-2"><Button className="bg-emerald-600" onClick={() => updateStatus(selected.id, "APPROVED")}>Approve</Button><Button className="bg-destructive" onClick={() => updateStatus(selected.id, "REJECTED")}>Reject</Button><Button className="bg-secondary" onClick={() => updateStatus(selected.id, "RETURNED")}>Return For Correction</Button></div></Card>}
       <Table>
         <thead className="bg-muted"><tr>{["Application", "Candidate", "Exam", "Status", "Action"].map((h) => <th className="p-3" key={h}>{h}</th>)}</tr></thead>
         <tbody>{filteredRows.map((app) => <tr className={`border-t border-border ${selectedId === app.id ? "bg-muted/60" : ""}`} key={app.id}><td className="p-3 font-semibold">{app.applicationNo}</td><td className="p-3">{app.candidate.user.name}</td><td className="p-3">{app.examination.code}</td><td className="p-3"><Badge>{app.status}</Badge></td><td className="p-3"><div className="flex gap-2"><Button className="h-8 w-8 px-0" onClick={() => { setSelectedId(app.id); setNotice(`${app.applicationNo} opened in review panel.`); }}><Eye size={15} /></Button><Button className="h-8 w-8 bg-secondary px-0" onClick={() => updateStatus(app.id, "RETURNED")}><RotateCcw size={15} /></Button></div></td></tr>)}{!filteredRows.length && <tr><td className="p-6 text-center text-slate-500" colSpan={5}>No candidate applications found in the database.</td></tr>}</tbody>

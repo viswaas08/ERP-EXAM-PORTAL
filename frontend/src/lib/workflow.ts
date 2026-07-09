@@ -25,6 +25,26 @@ export type CandidatePhaseSnapshot = {
   };
 };
 
+export type LiveExam = {
+  id: string;
+  code: string;
+  name: string;
+  department: string;
+  status: string;
+  workflowPhases: Array<{
+    id: string;
+    name: string;
+    status: string;
+    opensAt: string;
+    closesAt: string;
+  }>;
+  _count?: {
+    applications: number;
+    questionBanks: number;
+    centres: number;
+  };
+};
+
 export const fallbackPhase: CandidatePhaseSnapshot = {
   exam: { id: "none", code: "NOT-CONFIGURED", name: "No active examination" },
   activePhase: { id: "none", name: "Registration", status: "CLOSED", opensAt: "", closesAt: "" },
@@ -40,6 +60,10 @@ export const fallbackPhase: CandidatePhaseSnapshot = {
   }
 };
 
-export function getCandidatePhase() {
-  return api<CandidatePhaseSnapshot>("/candidate-public/active-phase");
+export function getCandidatePhase(examId?: string) {
+  return api<CandidatePhaseSnapshot>(`/candidate-public/active-phase${examId ? `?examId=${encodeURIComponent(examId)}` : ""}`);
+}
+
+export function getLiveExams() {
+  return api<LiveExam[]>("/candidate-public/live-exams");
 }

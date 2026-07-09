@@ -6,6 +6,10 @@ export async function list(req: Request, res: Response) {
   res.json(await examService.listExams(req.query as any));
 }
 
+export async function live(req: Request, res: Response) {
+  res.json(await examService.listLiveExams());
+}
+
 export async function create(req: Request, res: Response) {
   res.status(201).json(await examService.createExam(examSchema.parse(req.body)));
 }

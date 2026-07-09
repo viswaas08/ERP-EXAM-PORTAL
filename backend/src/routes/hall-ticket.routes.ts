@@ -14,9 +14,44 @@ async function ensureTamilNaduCentres(examId: string) {
   const cities = Array.isArray(setting?.value)
     ? setting.value as Array<{ city: string; district: string; state: string }>
     : [
+        { city: "Ariyalur", district: "Ariyalur", state: "Tamil Nadu" },
+        { city: "Chengalpattu", district: "Chengalpattu", state: "Tamil Nadu" },
         { city: "Chennai", district: "Chennai", state: "Tamil Nadu" },
         { city: "Coimbatore", district: "Coimbatore", state: "Tamil Nadu" },
-        { city: "Madurai", district: "Madurai", state: "Tamil Nadu" }
+        { city: "Cuddalore", district: "Cuddalore", state: "Tamil Nadu" },
+        { city: "Dharmapuri", district: "Dharmapuri", state: "Tamil Nadu" },
+        { city: "Dindigul", district: "Dindigul", state: "Tamil Nadu" },
+        { city: "Erode", district: "Erode", state: "Tamil Nadu" },
+        { city: "Kallakurichi", district: "Kallakurichi", state: "Tamil Nadu" },
+        { city: "Kancheepuram", district: "Kancheepuram", state: "Tamil Nadu" },
+        { city: "Nagercoil", district: "Kanniyakumari", state: "Tamil Nadu" },
+        { city: "Karur", district: "Karur", state: "Tamil Nadu" },
+        { city: "Krishnagiri", district: "Krishnagiri", state: "Tamil Nadu" },
+        { city: "Madurai", district: "Madurai", state: "Tamil Nadu" },
+        { city: "Mayiladuthurai", district: "Mayiladuthurai", state: "Tamil Nadu" },
+        { city: "Nagapattinam", district: "Nagapattinam", state: "Tamil Nadu" },
+        { city: "Namakkal", district: "Namakkal", state: "Tamil Nadu" },
+        { city: "Udhagamandalam", district: "Nilgiris", state: "Tamil Nadu" },
+        { city: "Perambalur", district: "Perambalur", state: "Tamil Nadu" },
+        { city: "Pudukkottai", district: "Pudukkottai", state: "Tamil Nadu" },
+        { city: "Ramanathapuram", district: "Ramanathapuram", state: "Tamil Nadu" },
+        { city: "Ranipet", district: "Ranipet", state: "Tamil Nadu" },
+        { city: "Salem", district: "Salem", state: "Tamil Nadu" },
+        { city: "Sivagangai", district: "Sivagangai", state: "Tamil Nadu" },
+        { city: "Tenkasi", district: "Tenkasi", state: "Tamil Nadu" },
+        { city: "Thanjavur", district: "Thanjavur", state: "Tamil Nadu" },
+        { city: "Theni", district: "Theni", state: "Tamil Nadu" },
+        { city: "Thoothukudi", district: "Thoothukudi", state: "Tamil Nadu" },
+        { city: "Tiruchirappalli", district: "Tiruchirappalli", state: "Tamil Nadu" },
+        { city: "Tirunelveli", district: "Tirunelveli", state: "Tamil Nadu" },
+        { city: "Tirupathur", district: "Tirupathur", state: "Tamil Nadu" },
+        { city: "Tiruppur", district: "Tiruppur", state: "Tamil Nadu" },
+        { city: "Tiruvallur", district: "Tiruvallur", state: "Tamil Nadu" },
+        { city: "Tiruvannamalai", district: "Tiruvannamalai", state: "Tamil Nadu" },
+        { city: "Tiruvarur", district: "Tiruvarur", state: "Tamil Nadu" },
+        { city: "Vellore", district: "Vellore", state: "Tamil Nadu" },
+        { city: "Viluppuram", district: "Viluppuram", state: "Tamil Nadu" },
+        { city: "Virudhunagar", district: "Virudhunagar", state: "Tamil Nadu" }
       ];
 
   await prisma.examCentre.createMany({

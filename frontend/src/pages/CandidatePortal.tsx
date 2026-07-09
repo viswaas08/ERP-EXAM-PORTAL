@@ -3,30 +3,15 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Button, Card, Input, Select } from "../components/ui";
-import { fallbackPhase, getCandidatePhase, type CandidatePhaseSnapshot } from "../lib/workflow";
+import { fallbackPhase, getCandidatePhase, getLiveExams, type CandidatePhaseSnapshot, type LiveExam } from "../lib/workflow";
 import { usePersistentState } from "../lib/usePersistentState";
 import { api } from "../lib/api";
+import { tamilNaduDistrictCentres } from "../data/tamilNaduDistricts";
 
 const steps = ["Personal Details", "Address", "Education", "Experience", "Preferences", "Documents", "Preview", "Submit"];
 const nationalities = ["Indian", "Nepalese", "Bhutanese", "OCI", "Other"];
 const categories = ["General", "OBC", "SC", "ST", "EWS", "PwD", "Ex-Servicemen"];
 const qualifications = ["Bachelor's Degree", "Master's Degree", "B.Tech", "B.Sc", "B.Com", "BA", "Diploma", "PhD", "12th Pass"];
-const exams = ["National Recruitment Examination", "State Eligibility Test", "Technical Engineer Cadre", "University Entrance Test", "Public Service Preliminary"];
-const tamilNaduCities = [
-  { city: "Chennai", district: "Chennai" },
-  { city: "Coimbatore", district: "Coimbatore" },
-  { city: "Madurai", district: "Madurai" },
-  { city: "Tiruchirappalli", district: "Tiruchirappalli" },
-  { city: "Salem", district: "Salem" },
-  { city: "Tirunelveli", district: "Tirunelveli" },
-  { city: "Erode", district: "Erode" },
-  { city: "Vellore", district: "Vellore" },
-  { city: "Thanjavur", district: "Thanjavur" },
-  { city: "Thoothukudi", district: "Thoothukudi" },
-  { city: "Dindigul", district: "Dindigul" },
-  { city: "Nagercoil", district: "Kanniyakumari" }
-];
-
 export function CandidatePortal() {
   const { isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
@@ -36,6 +21,7 @@ export function CandidatePortal() {
   const [uploadedDocs, setUploadedDocs] = usePersistentState<string[]>("examPortal.candidateRegistration.v2.uploadedDocs", []);
   const [notice, setNotice] = usePersistentState("examPortal.candidateRegistration.v2.notice", "Complete each step and preview before final submission.");
   const [phase, setPhase] = useState<CandidatePhaseSnapshot>(fallbackPhase);
+  const [liveExams, setLiveExams] = useState<LiveExam[]>([]);
   const [form, setForm] = usePersistentState("examPortal.candidateRegistration.v2.form", {
     name: "",
     email: "",
@@ -48,23 +34,34 @@ export function CandidatePortal() {
     university: "",
     percentage: "",
     year: "",
-    exam: "National Recruitment Examination",
+    exam: "",
     centre: "Chennai",
     address: "",
     experience: ""
   });
 
   useEffect(() => {
-    getCandidatePhase()
+    getLiveExams()
+      .then((items) => {
+        setLiveExams(items);
+        const firstLiveExam = items[0];
+        if (!form.exam && firstLiveExam) {
+          updateField("exam", firstLiveExam.id);
+        }
+        setNotice(items.length ? `${items.length} live examination(s) are open for registration.` : "No live examinations are open for registration.");
+      })
+      .catch(() => setNotice("Could not load live examinations. Registration will unlock when the backend is available."));
+  }, []);
+
+  useEffect(() => {
+    if (!form.exam) return;
+    getCandidatePhase(form.exam)
       .then((snapshot) => {
         setPhase(snapshot);
-        setNotice(`${snapshot.exam.name}: active phase is ${snapshot.activePhase?.name ?? "Not scheduled"}.`);
-        if (snapshot.exam.name) {
-          updateField("exam", snapshot.exam.name);
-        }
+        setNotice(`${snapshot.exam.code}: active phase is ${snapshot.activePhase?.name ?? "Not scheduled"}.`);
       })
-      .catch(() => setNotice("Could not reach the workflow service. Registration will save when the backend is available."));
-  }, []);
+      .catch(() => setNotice("Could not reach the workflow service for the selected examination."));
+  }, [form.exam]);
 
   function handleLogout() {
     logout();
@@ -95,12 +92,18 @@ export function CandidatePortal() {
       return;
     }
     try {
-      const selectedCity = tamilNaduCities.find((item) => item.city === form.centre) ?? tamilNaduCities[0];
+      const selectedCity = tamilNaduDistrictCentres.find((item) => item.city === form.centre) ?? tamilNaduDistrictCentres[0];
+      const selectedExam = liveExams.find((item) => item.id === form.exam);
+      if (!selectedExam) {
+        setNotice("Select a live examination before final submission.");
+        return;
+      }
       const endpoint = isAuthenticated ? "/candidate/registration" : "/candidate/public-registration";
       const application = await api<{ applicationNo: string; candidateLogin?: { email: string } }>(endpoint, {
         method: "POST",
         body: JSON.stringify({
           ...form,
+          exam: selectedExam.id,
           documents: uploadedDocs,
           state: "Tamil Nadu",
           district: selectedCity.district,
@@ -150,15 +153,15 @@ export function CandidatePortal() {
           <Card className="space-y-4">
             <h2 className="font-semibold">{steps[activeStep]}</h2>
             {activeStep === 0 && <div className="grid gap-3 md:grid-cols-2"><Input placeholder="Full name" value={form.name} onChange={(event) => updateField("name", event.target.value)} /><Input placeholder="Email" value={form.email} onChange={(event) => updateField("email", event.target.value)} />{!isAuthenticated && <Input placeholder="Create password" type="password" value={form.password} onChange={(event) => updateField("password", event.target.value)} />}<Input placeholder="Phone" value={form.phone} onChange={(event) => updateField("phone", event.target.value)} /></div>}
-            {activeStep === 1 && <div className="grid gap-3 md:grid-cols-2"><Input type="date" value={form.dateOfBirth} onChange={(event) => updateField("dateOfBirth", event.target.value)} /><Select value={form.nationality} onChange={(event) => updateField("nationality", event.target.value)}>{nationalities.map((item) => <option key={item}>{item}</option>)}</Select><Select value={form.category} onChange={(event) => updateField("category", event.target.value)}>{categories.map((item) => <option key={item}>{item}</option>)}</Select><Select value={form.centre} onChange={(event) => updateField("centre", event.target.value)}>{tamilNaduCities.map((item) => <option key={item.city}>{item.city}</option>)}</Select><textarea className="min-h-24 rounded-md border border-border bg-background p-3 text-sm md:col-span-2" placeholder="Address" value={form.address} onChange={(event) => updateField("address", event.target.value)} /></div>}
+            {activeStep === 1 && <div className="grid gap-3 md:grid-cols-2"><Input type="date" value={form.dateOfBirth} onChange={(event) => updateField("dateOfBirth", event.target.value)} /><Select value={form.nationality} onChange={(event) => updateField("nationality", event.target.value)}>{nationalities.map((item) => <option key={item}>{item}</option>)}</Select><Select value={form.category} onChange={(event) => updateField("category", event.target.value)}>{categories.map((item) => <option key={item}>{item}</option>)}</Select><Select value={form.centre} onChange={(event) => updateField("centre", event.target.value)}>{tamilNaduDistrictCentres.map((item) => <option key={item.district} value={item.city}>{item.district} - {item.city}</option>)}</Select><textarea className="min-h-24 rounded-md border border-border bg-background p-3 text-sm md:col-span-2" placeholder="Address" value={form.address} onChange={(event) => updateField("address", event.target.value)} /></div>}
             {activeStep === 2 && <div className="grid gap-3 md:grid-cols-2"><Select value={form.qualification} onChange={(event) => updateField("qualification", event.target.value)}>{qualifications.map((item) => <option key={item}>{item}</option>)}</Select><Input placeholder="University" value={form.university} onChange={(event) => updateField("university", event.target.value)} /><Input placeholder="Percentage" value={form.percentage} onChange={(event) => updateField("percentage", event.target.value)} /><Input placeholder="Passing year" value={form.year} onChange={(event) => updateField("year", event.target.value)} /></div>}
             {activeStep === 3 && <textarea className="min-h-28 w-full rounded-md border border-border bg-background p-3 text-sm" placeholder="Experience details, if any" value={form.experience} onChange={(event) => updateField("experience", event.target.value)} />}
-            {activeStep === 4 && <div className="grid gap-3 md:grid-cols-2"><Select value={form.exam} onChange={(event) => updateField("exam", event.target.value)}>{(phase.exam.name ? [phase.exam.name] : exams).map((item) => <option key={item}>{item}</option>)}</Select><Select value={form.centre} onChange={(event) => updateField("centre", event.target.value)}>{tamilNaduCities.map((item) => <option key={item.city}>{item.city}</option>)}</Select></div>}
+            {activeStep === 4 && <div className="grid gap-3 md:grid-cols-2"><Select value={form.exam} onChange={(event) => updateField("exam", event.target.value)}>{liveExams.length ? liveExams.map((item) => <option key={item.id} value={item.id}>{item.code} - {item.name}</option>) : <option value="">No live examinations</option>}</Select><Select value={form.centre} onChange={(event) => updateField("centre", event.target.value)}>{tamilNaduDistrictCentres.map((item) => <option key={item.district} value={item.city}>{item.district} - {item.city}</option>)}</Select></div>}
             {activeStep === 5 && <div className="grid gap-3 md:grid-cols-3">{["Photo", "Signature", "Degree Certificate"].map((item) => <button className={`grid h-28 place-items-center rounded-md border border-dashed border-border text-sm ${uploadedDocs.includes(item) ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950" : ""}`} key={item} onClick={() => uploadDoc(item)}><Upload size={20} />{uploadedDocs.includes(item) ? `${item} Uploaded` : item}</button>)}</div>}
-            {activeStep >= 6 && <div className="rounded-md bg-muted p-4 text-sm"><p><strong>Name:</strong> {form.name}</p><p><strong>Email:</strong> {form.email}</p><p><strong>Education:</strong> {form.qualification}, {form.percentage}%</p><p><strong>Preference:</strong> {form.exam}, {form.centre}</p><p><strong>Documents:</strong> {uploadedDocs.length}/3 uploaded</p><p><strong>Application No:</strong> {applicationNo || "Will be generated on submit"}</p><p><strong>Status:</strong> {submitted ? "Submitted to database" : "Ready for final submission"}</p></div>}
+            {activeStep >= 6 && <div className="rounded-md bg-muted p-4 text-sm"><p><strong>Name:</strong> {form.name}</p><p><strong>Email:</strong> {form.email}</p><p><strong>Education:</strong> {form.qualification}, {form.percentage}%</p><p><strong>Preference:</strong> {liveExams.find((item) => item.id === form.exam)?.code ?? "Select exam"}, {form.centre}</p><p><strong>Documents:</strong> {uploadedDocs.length}/3 uploaded</p><p><strong>Application No:</strong> {applicationNo || "Will be generated on submit"}</p><p><strong>Status:</strong> {submitted ? "Submitted to database" : "Ready for final submission"}</p></div>}
             <div className="flex flex-wrap gap-2">
               <Button className="bg-secondary" onClick={() => setActiveStep((step) => Math.max(0, step - 1))}>Back</Button>
-              <Button onClick={nextStep} disabled={!phase.access.registration && !phase.access.correction}><FileText size={18} /> {activeStep === steps.length - 1 ? "Final Submit" : "Save & Next"}</Button>
+              <Button onClick={nextStep} disabled={(!phase.access.registration && !phase.access.correction) || !liveExams.length}><FileText size={18} /> {activeStep === steps.length - 1 ? "Final Submit" : "Save & Next"}</Button>
               {submitted && <Button className="bg-emerald-600" onClick={downloadAcknowledgement}>Download Acknowledgement</Button>}
             </div>
           </Card>

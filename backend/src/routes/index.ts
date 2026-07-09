@@ -23,6 +23,13 @@ apiRoutes.use("/candidate", candidateRoutes);
 apiRoutes.use("/hall-tickets", hallTicketRoutes);
 apiRoutes.use("/questions", questionRoutes);
 
+apiRoutes.get("/candidate-public/live-exams", async (_req, res, next) => {
+  try {
+    res.json(await import("../services/exam.service.js").then((service) => service.listLiveExams()));
+  } catch (error) {
+    next(error);
+  }
+});
 apiRoutes.get("/candidate-public/active-phase", async (req, res, next) => {
   try {
     res.json(await import("../services/exam.service.js").then((service) => service.getCandidatePhaseSnapshot(req.query.examId as string | undefined)));

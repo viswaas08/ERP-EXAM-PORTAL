@@ -12,6 +12,14 @@ export function listExams(query: { search?: string; status?: string }) {
   });
 }
 
+export function listLiveExams() {
+  return prisma.examination.findMany({
+    where: { status: { in: ["OPEN", "ACTIVE"] } },
+    include: { workflowPhases: { orderBy: { opensAt: "asc" } }, _count: { select: { applications: true, questionBanks: true, centres: true } } },
+    orderBy: { createdAt: "desc" }
+  });
+}
+
 export function createExam(data: any) {
   const now = new Date();
   return prisma.examination.create({

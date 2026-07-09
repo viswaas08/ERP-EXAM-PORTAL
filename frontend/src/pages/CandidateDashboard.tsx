@@ -2,7 +2,7 @@ import { Download, FileText, LogOut, MonitorPlay, Ticket } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { Badge, Button, Card } from "../components/ui";
+import { Badge, Button, Card, Select } from "../components/ui";
 import { fallbackPhase, getCandidatePhase, type CandidatePhaseSnapshot } from "../lib/workflow";
 import { usePersistentState } from "../lib/usePersistentState";
 import { API_URL, api } from "../lib/api";
@@ -18,15 +18,19 @@ type CandidateDashboardData = {
     state: string;
     district: string;
   };
-  application: null | {
+  application: null | CandidateApplication;
+  applications?: CandidateApplication[];
+  phase: CandidatePhaseSnapshot;
+};
+
+type CandidateApplication = {
+    id?: string;
     applicationNo: string;
     status: string;
-    examination: { name: string; code: string };
+    examination: { id?: string; name: string; code: string };
     documents: Array<{ type: string; status: string }>;
     hallTicket: null | { id: string; rollNumber: string; seatNumber: string; reportingTime: string; centre: { name: string } };
     result: null | { marks: number; percentage: number; rank: number; qualified: boolean };
-  };
-  phase: CandidatePhaseSnapshot;
 };
 
 export function CandidateDashboard() {
@@ -37,12 +41,14 @@ export function CandidateDashboard() {
   const [timelineIndex, setTimelineIndex] = usePersistentState("examPortal.candidateDashboard.timelineIndex", 3);
   const [phase, setPhase] = useState<CandidatePhaseSnapshot>(fallbackPhase);
   const [dashboard, setDashboard] = useState<CandidateDashboardData | null>(null);
+  const [selectedApplicationNo, setSelectedApplicationNo] = usePersistentState("examPortal.candidateDashboard.selectedApplicationNo", "");
 
   useEffect(() => {
     api<CandidateDashboardData>("/candidate/dashboard")
       .then((data) => {
         setDashboard(data);
         setPhase(data.phase);
+        setSelectedApplicationNo((current) => current || data.applications?.[0]?.applicationNo || data.application?.applicationNo || "");
         const index = timeline.findIndex((item) => data.phase.activePhase?.name.toLowerCase().includes(item.toLowerCase().split(" ")[0]));
         setTimelineIndex(index >= 0 ? index : 0);
         setNotice(data.application ? `${data.application.applicationNo} loaded from Neon database.` : "No database application found yet. Submit registration first.");
@@ -56,6 +62,17 @@ export function CandidateDashboard() {
           .catch(() => setNotice("Workflow service is not reachable. Login again when the backend is available."));
       });
   }, []);
+
+  const applications = dashboard?.applications ?? (dashboard?.application ? [dashboard.application] : []);
+  const selectedApplication = applications.find((item) => item.applicationNo === selectedApplicationNo) ?? applications[0] ?? null;
+
+  useEffect(() => {
+    const examId = selectedApplication?.examination.id;
+    if (!examId) return;
+    getCandidatePhase(examId)
+      .then((snapshot) => setPhase(snapshot))
+      .catch(() => undefined);
+  }, [selectedApplication?.examination.id]);
 
   function handleLogout() {
     logout();
@@ -72,7 +89,7 @@ export function CandidateDashboard() {
   }
 
   async function downloadHallTicketPdf() {
-    const ticket = dashboard?.application?.hallTicket;
+    const ticket = selectedApplication?.hallTicket;
     if (!ticket) return;
     try {
       const token = localStorage.getItem("accessToken");
@@ -83,7 +100,7 @@ export function CandidateDashboard() {
       const url = URL.createObjectURL(await response.blob());
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${dashboard?.application?.applicationNo ?? "hall-ticket"}-hall-ticket.pdf`;
+      link.download = `${selectedApplication?.applicationNo ?? "hall-ticket"}-hall-ticket.pdf`;
       link.click();
       URL.revokeObjectURL(url);
       setNotice("Hall ticket PDF downloaded.");
@@ -99,21 +116,22 @@ export function CandidateDashboard() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><h1 className="text-2xl font-bold">Candidate Dashboard</h1><p className="text-sm text-slate-500">Current examination phase, application timeline, downloads, and result access.</p></div>
           <div className="flex flex-wrap items-center gap-2">
+            {applications.length > 0 && <Select className="max-w-xs" value={selectedApplication?.applicationNo ?? ""} onChange={(event) => setSelectedApplicationNo(event.target.value)}>{applications.map((item) => <option key={item.applicationNo} value={item.applicationNo}>{item.examination.code} - {item.applicationNo}</option>)}</Select>}
             <Badge className="bg-emerald-50 text-emerald-700">Current Phase: {phase.activePhase?.name ?? "Loading"}</Badge>
             <Button className="bg-destructive" onClick={handleLogout}><LogOut size={18} /> Logout</Button>
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-4">{[
-          dashboard?.application ? `Application ${dashboard.application.status}` : "No Application",
-          dashboard?.application ? `${dashboard.application.documents.length} Documents Uploaded` : "0 Documents Uploaded",
-          dashboard?.application?.hallTicket ? "Hall Ticket Ready" : "Hall Ticket Pending",
-          dashboard?.application?.result ? "Result Published" : "Result Pending"
+          selectedApplication ? `Application ${selectedApplication.status}` : "No Application",
+          selectedApplication ? `${selectedApplication.documents.length} Documents Uploaded` : "0 Documents Uploaded",
+          selectedApplication?.hallTicket ? "Hall Ticket Ready" : "Hall Ticket Pending",
+          selectedApplication?.result ? "Result Published" : "Result Pending"
         ].map((item) => <Card key={item}><p className="font-semibold">{item}</p></Card>)}</div>
         <Card><h2 className="mb-4 font-semibold">Application Timeline</h2><div className="grid gap-2 md:grid-cols-7">{timeline.map((item, i) => <button className={`rounded-md border border-border p-3 text-left ${i === timelineIndex ? "bg-primary text-white" : ""}`} key={item} onClick={() => { setTimelineIndex(i); setNotice(`${item} timeline stage opened.`); }}><Badge>{i <= timelineIndex ? "Done" : "Pending"}</Badge><p className="mt-2 text-sm font-semibold">{item}</p></button>)}</div></Card>
         <div className="grid gap-4 md:grid-cols-3">
-          <Card><Ticket className="mb-3 text-primary" /><h2 className="font-semibold">Hall Ticket</h2><p className="my-3 text-sm text-slate-500">{dashboard?.application?.hallTicket ? `Roll No ${dashboard.application.hallTicket.rollNumber}, ${dashboard.application.hallTicket.centre.name}.` : phase.access.hallTicket ? "Hall ticket phase is active, but no ticket generated yet." : `Locked during ${phase.activePhase?.name}.`}</p><Button disabled={(!phase.access.hallTicket && !phase.access.archiveDownloads) || !dashboard?.application?.hallTicket} onClick={downloadHallTicketPdf}><Download size={18} /> Download PDF</Button></Card>
+          <Card><Ticket className="mb-3 text-primary" /><h2 className="font-semibold">Hall Ticket</h2><p className="my-3 text-sm text-slate-500">{selectedApplication?.hallTicket ? `Roll No ${selectedApplication.hallTicket.rollNumber}, ${selectedApplication.hallTicket.centre.name}.` : phase.access.hallTicket ? "Hall ticket phase is active, but no ticket generated yet." : `Locked during ${phase.activePhase?.name}.`}</p><Button disabled={(!phase.access.hallTicket && !phase.access.archiveDownloads) || !selectedApplication?.hallTicket} onClick={downloadHallTicketPdf}><Download size={18} /> Download PDF</Button></Card>
           <Card><MonitorPlay className="mb-3 text-secondary" /><h2 className="font-semibold">Online Examination</h2><p className="my-3 text-sm text-slate-500">{phase.access.onlineExam ? "Exam console is enabled for the active phase." : `Exam locked during ${phase.activePhase?.name}.`}</p><div className="flex flex-wrap gap-2"><Button className="bg-secondary" disabled={!phase.access.onlineExam} onClick={() => setNotice("System check passed. Browser, keyboard, and timer are ready.")}>System Check</Button>{phase.access.onlineExam ? <Link to="/exam"><Button>Open Exam Console</Button></Link> : <Button disabled>Open Exam Console</Button>}</div></Card>
-          <Card><FileText className="mb-3 text-amber-600" /><h2 className="font-semibold">Result</h2><p className="my-3 text-sm text-slate-500">{resultVisible && dashboard?.application?.result ? `Marks ${dashboard.application.result.marks}, Rank ${dashboard.application.result.rank}, ${dashboard.application.result.qualified ? "Qualified" : "Not Qualified"}.` : phase.access.result ? "Result phase is active, but no score card generated yet." : `Result locked during ${phase.activePhase?.name}.`}</p><div className="flex flex-wrap gap-2"><Button disabled={(!phase.access.result && !phase.access.archiveDownloads) || !dashboard?.application?.result} onClick={() => { setResultVisible(true); setTimelineIndex(6); setNotice("Result opened from Neon database."); }}>View Result</Button>{resultVisible && dashboard?.application?.result && <Button className="bg-secondary" onClick={() => downloadFile("score-card.txt", `Score Card\nMarks: ${dashboard.application?.result?.marks}\nRank: ${dashboard.application?.result?.rank}\nQualified: ${dashboard.application?.result?.qualified ? "Yes" : "No"}`)}>Download</Button>}</div></Card>
+          <Card><FileText className="mb-3 text-amber-600" /><h2 className="font-semibold">Result</h2><p className="my-3 text-sm text-slate-500">{resultVisible && selectedApplication?.result ? `Marks ${selectedApplication.result.marks}, Rank ${selectedApplication.result.rank}, ${selectedApplication.result.qualified ? "Qualified" : "Not Qualified"}.` : phase.access.result ? "Result phase is active, but no score card generated yet." : `Result locked during ${phase.activePhase?.name}.`}</p><div className="flex flex-wrap gap-2"><Button disabled={(!phase.access.result && !phase.access.archiveDownloads) || !selectedApplication?.result} onClick={() => { setResultVisible(true); setTimelineIndex(6); setNotice("Result opened from Neon database."); }}>View Result</Button>{resultVisible && selectedApplication?.result && <Button className="bg-secondary" onClick={() => downloadFile("score-card.txt", `Score Card\nMarks: ${selectedApplication.result?.marks}\nRank: ${selectedApplication.result?.rank}\nQualified: ${selectedApplication.result?.qualified ? "Yes" : "No"}`)}>Download</Button>}</div></Card>
         </div>
       </div>
     </main>

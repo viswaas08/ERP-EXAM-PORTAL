@@ -60,6 +60,7 @@ export function Examinations() {
   const [notice, setNotice] = usePersistentState("examPortal.examinations.notice", "Ready to manage examinations.");
   const [selectedCode, setSelectedCode] = usePersistentState("examPortal.examinations.selectedCode", rows[0]?.code ?? "");
   const [selectedExamId, setSelectedExamId] = usePersistentState<string | undefined>("examPortal.examinations.selectedExamId", undefined);
+  const [, setAdminSelectedExamCode] = usePersistentState("examPortal.admin.selectedExamCode", "All Exams");
   const [hasLocalChanges, setHasLocalChanges] = usePersistentState("examPortal.examinations.hasLocalChanges", false);
 
   useEffect(() => {
@@ -74,6 +75,7 @@ export function Examinations() {
         setRows(mapped);
         setSelectedCode(mapped[0]?.code ?? "");
         setSelectedExamId(mapped[0]?.id);
+        setAdminSelectedExamCode(mapped[0]?.code ?? "All Exams");
         setNotice(mapped.length ? "Loaded live examinations and workflow phases from the database." : "No examinations exist yet. Create the first examination from Admin.");
       })
       .catch(() => {
@@ -120,6 +122,7 @@ export function Examinations() {
       setRows((current) => [mapped, ...current]);
       setSelectedCode(mapped.code);
       setSelectedExamId(mapped.id);
+      setAdminSelectedExamCode(mapped.code);
       setHasLocalChanges(true);
       setNotice(`${mapped.code} created in Neon database.`);
       return;
@@ -160,6 +163,7 @@ export function Examinations() {
         const mapped = mapApiExam(updated);
         setRows((current) => current.map((exam) => exam.id === mapped.id ? mapped : exam));
         setSelectedCode(mapped.code);
+        setAdminSelectedExamCode(mapped.code);
         setHasLocalChanges(true);
         setNotice(`${mapped.code} updated in Neon database.`);
         return;
@@ -183,6 +187,7 @@ export function Examinations() {
         setRows((current) => [mapped, ...current]);
         setSelectedCode(mapped.code);
         setSelectedExamId(mapped.id);
+        setAdminSelectedExamCode(mapped.code);
         setHasLocalChanges(true);
         setNotice(`${source.code} cloned in Neon as ${mapped.code}.`);
         return;
@@ -194,6 +199,7 @@ export function Examinations() {
     setRows((current) => [clone, ...current]);
     setHasLocalChanges(true);
     setSelectedCode(clone.code);
+    setAdminSelectedExamCode(clone.code);
     setNotice(`${source.code} cloned into ${clone.code}.`);
   }
 
@@ -245,7 +251,7 @@ export function Examinations() {
         <thead className="bg-muted"><tr>{["Code", "Exam", "Department", "Current Phase", "Dates", "Applications", "Status", "Actions"].map((h) => <th className="p-3" key={h}>{h}</th>)}</tr></thead>
         <tbody>
           {filteredRows.map((exam) => (
-            <tr className={`border-t border-border ${selectedCode === exam.code ? "bg-muted/60" : ""}`} key={exam.code} onClick={() => { setSelectedCode(exam.code); setSelectedExamId(exam.id); }}>
+            <tr className={`border-t border-border ${selectedCode === exam.code ? "bg-muted/60" : ""}`} key={exam.code} onClick={() => { setSelectedCode(exam.code); setSelectedExamId(exam.id); setAdminSelectedExamCode(exam.code); }}>
               <td className="p-3 font-semibold">{exam.code}</td>
               <td className="p-3">{exam.name}</td>
               <td className="p-3">{exam.department}</td>

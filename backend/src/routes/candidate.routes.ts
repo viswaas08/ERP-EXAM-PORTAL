@@ -21,10 +21,18 @@ async function getCandidateRoleId() {
   return role.id;
 }
 
-async function resolveExam(examName?: string) {
+async function resolveExam(examInput?: string) {
+  const input = String(examInput || "").trim();
   const exam = await prisma.examination.findFirst({
-    where: examName
-      ? { OR: [{ name: { contains: examName, mode: "insensitive" } }, { code: { contains: examName, mode: "insensitive" } }] }
+    where: input
+      ? {
+          status: { in: ["OPEN", "ACTIVE"] },
+          OR: [
+            { id: input },
+            { name: { contains: input, mode: "insensitive" } },
+            { code: { contains: input, mode: "insensitive" } }
+          ]
+        }
       : { status: { in: ["OPEN", "ACTIVE"] } },
     include: { workflowPhases: true },
     orderBy: { createdAt: "desc" }
@@ -34,10 +42,15 @@ async function resolveExam(examName?: string) {
   return exam;
 }
 
+function applicationNumber(candidateId: string, examCode: string) {
+  const code = examCode.replace(/[^A-Z0-9]/gi, "").slice(0, 8).toUpperCase() || "EXAM";
+  return `APP-${new Date().getFullYear()}-${code}-${candidateId.slice(-6).toUpperCase()}`;
+}
+
 candidateRoutes.get("/dashboard", authenticate, async (req: AuthRequest, res) => {
   if (!req.user) throw new AppError(401, "Authentication required");
   const candidate = await ensureCandidate(req.user.id);
-  const application = await prisma.application.findFirst({
+  const applications = await prisma.application.findMany({
     where: { candidateId: candidate.id },
     include: {
       examination: true,
@@ -48,18 +61,19 @@ candidateRoutes.get("/dashboard", authenticate, async (req: AuthRequest, res) =>
     },
     orderBy: { submittedAt: "desc" }
   });
+  const application = applications[0] ?? null;
 
   const phase = await getCandidatePhaseSnapshot(application?.examinationId);
   const profile = await prisma.candidateProfile.findUnique({ where: { candidateId: candidate.id } });
 
-  res.json({ profile, application, phase });
+  res.json({ profile, application, applications, phase });
 });
 
 candidateRoutes.post("/registration", authenticate, async (req: AuthRequest, res) => {
   if (!req.user) throw new AppError(401, "Authentication required");
   const candidate = await ensureCandidate(req.user.id);
   const exam = await resolveExam(req.body.exam);
-  const applicationNo = `APP-${new Date().getFullYear()}-${candidate.id.slice(-6).toUpperCase()}`;
+  const applicationNo = applicationNumber(candidate.id, exam.code);
   const percentage = Number(req.body.percentage || 0);
 
   await prisma.candidateProfile.upsert({
@@ -166,7 +180,7 @@ candidateRoutes.post("/public-registration", async (req, res) => {
 
   const candidate = await ensureCandidate(user.id);
   const exam = await resolveExam(req.body.exam);
-  const applicationNo = `APP-${new Date().getFullYear()}-${candidate.id.slice(-6).toUpperCase()}`;
+  const applicationNo = applicationNumber(candidate.id, exam.code);
   const percentage = Number(req.body.percentage || 0);
 
   await prisma.candidateProfile.upsert({
