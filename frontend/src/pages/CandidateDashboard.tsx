@@ -30,7 +30,7 @@ type CandidateApplication = {
     examination: { id?: string; name: string; code: string };
     documents: Array<{ type: string; status: string }>;
     hallTicket: null | { id: string; rollNumber: string; seatNumber: string; reportingTime: string; centre: { name: string } };
-    result: null | { marks: number; percentage: number; rank: number; qualified: boolean; status?: string };
+    result: null | { id?: string; marks: number; percentage: number; rank: number; qualified: boolean; status?: string };
 };
 
 export function CandidateDashboard() {
@@ -50,9 +50,16 @@ export function CandidateDashboard() {
         setPhase(data.phase);
         const applications = data.applications ?? (data.application ? [data.application] : []);
         setSelectedApplicationNo((current) => {
-          if (applications.some((item) => item.applicationNo === current)) return current;
+          const currentApplication = applications.find((item) => item.applicationNo === current);
+          if (currentApplication?.result?.status === "PUBLISHED") return current;
+          const publishedApplication = applications.find((item) => item.result?.status === "PUBLISHED");
+          if (publishedApplication) return publishedApplication.applicationNo;
+          if (currentApplication) return current;
           return applications.find((item) => item.hallTicket)?.applicationNo || applications[0]?.applicationNo || "";
         });
+        if (applications.some((item) => item.result?.status === "PUBLISHED")) {
+          setResultVisible(true);
+        }
         setSelectedPhaseName(data.phase.activePhase?.name ?? "");
         setNotice(data.application ? `${data.application.applicationNo} loaded from Neon database.` : "No database application found yet. Submit registration first.");
       })
@@ -88,6 +95,11 @@ export function CandidateDashboard() {
   }));
   const activePhaseIndex = Math.max(0, workflowPhases.findIndex((item) => item.id === phase.activePhase?.id || item.name === phase.activePhase?.name || item.status === "OPEN"));
   const publishedResult = selectedApplication?.result?.status === "PUBLISHED" ? selectedApplication.result : null;
+  const resultMessage = publishedResult
+    ? `Marks ${publishedResult.marks}, Rank ${publishedResult.rank}, ${publishedResult.qualified ? "Qualified" : "Not Qualified"}.`
+    : phase.access.result
+      ? "Result publication is active, but no published result is available for this application yet."
+      : `Result is locked during ${phase.activePhase?.name ?? "the current phase"}.`;
   const hallTicketMessage = selectedApplication?.hallTicket
     ? `Roll No ${selectedApplication.hallTicket.rollNumber}, ${selectedApplication.hallTicket.centre.name}.`
     : selectedApplication?.status !== "APPROVED"
@@ -162,7 +174,7 @@ export function CandidateDashboard() {
             <div className="grid gap-4 md:grid-cols-3">
               <Card><Ticket className="mb-3 text-primary" /><h2 className="font-semibold">Hall Ticket</h2><p className="my-3 text-sm text-slate-500">{hallTicketMessage}</p><Button disabled={!selectedApplication.hallTicket} onClick={downloadHallTicketPdf}><Download size={18} /> Download PDF</Button></Card>
               <Card><MonitorPlay className="mb-3 text-secondary" /><h2 className="font-semibold">Online Examination</h2><p className="my-3 text-sm text-slate-500">{phase.access.onlineExam ? "Exam console is enabled for this application." : `Exam locked during ${phase.activePhase?.name ?? "the current phase"}.`}</p>{phase.access.onlineExam ? <Link to="/exam"><Button>Open Exam Console</Button></Link> : <Button disabled>Open Exam Console</Button>}</Card>
-              <Card><FileText className="mb-3 text-amber-600" /><h2 className="font-semibold">Result</h2><p className="my-3 text-sm text-slate-500">{resultVisible && publishedResult ? `Marks ${publishedResult.marks}, Rank ${publishedResult.rank}, ${publishedResult.qualified ? "Qualified" : "Not Qualified"}.` : "No result has been published for this application."}</p><div className="flex flex-wrap gap-2"><Button disabled={!publishedResult} onClick={() => { setResultVisible(true); setNotice("Result opened from database."); }}>View Result</Button>{resultVisible && publishedResult && <Button className="bg-secondary" onClick={() => downloadFile("score-card.txt", `Score Card\nMarks: ${publishedResult.marks}\nRank: ${publishedResult.rank}\nQualified: ${publishedResult.qualified ? "Yes" : "No"}`)}>Download</Button>}</div></Card>
+              <Card><FileText className="mb-3 text-amber-600" /><h2 className="font-semibold">Result</h2><p className="my-3 text-sm text-slate-500">{resultVisible || publishedResult ? resultMessage : "No result has been opened for this application."}</p><div className="flex flex-wrap gap-2"><Button disabled={!publishedResult} onClick={() => { setResultVisible(true); setNotice("Published result opened from database."); }}>View Result</Button>{publishedResult && <Button className="bg-secondary" onClick={() => downloadFile("score-card.txt", `Score Card\nApplication: ${selectedApplication.applicationNo}\nExam: ${selectedApplication.examination.code}\nMarks: ${publishedResult.marks}\nPercentage: ${publishedResult.percentage.toFixed(2)}\nRank: ${publishedResult.rank}\nQualified: ${publishedResult.qualified ? "Yes" : "No"}`)}>Download</Button>}</div></Card>
             </div>
           </>
         )}

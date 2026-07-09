@@ -5,6 +5,30 @@ import { streamPortalPdf } from "../services/pdf.service.js";
 
 export const resultRoutes = Router();
 
+function candidateName(application: { candidate: { user: { name?: string | null; email?: string | null } } }) {
+  const name = application.candidate.user.name?.trim();
+  return name || application.candidate.user.email || "Unknown Candidate";
+}
+
+async function activateResultPublicationPhase(examId: string) {
+  const resultPhase = await prisma.workflowPhase.findFirst({
+    where: { examId, name: "Result Publication" }
+  });
+  if (!resultPhase) return null;
+
+  return prisma.$transaction(async (tx) => {
+    await tx.workflowPhase.updateMany({
+      where: { examId },
+      data: { status: "SCHEDULED" }
+    });
+
+    return tx.workflowPhase.update({
+      where: { id: resultPhase.id },
+      data: { status: "OPEN" }
+    });
+  });
+}
+
 async function evaluateApplications(examId?: string) {
   const applications = await prisma.application.findMany({
     where: { examinationId: examId || undefined }
@@ -68,6 +92,28 @@ async function evaluateApplications(examId?: string) {
   return evaluated;
 }
 
+resultRoutes.get("/exams", authenticate, async (_req, res) => {
+  const exams = await prisma.examination.findMany({
+    where: { status: { in: ["OPEN", "ACTIVE", "LIVE"] } },
+    include: {
+      workflowPhases: { orderBy: { opensAt: "asc" } },
+      _count: { select: { applications: true, sessions: true, results: true } }
+    },
+    orderBy: { createdAt: "desc" }
+  });
+
+  res.json(exams.map((exam) => ({
+    id: exam.id,
+    code: exam.code,
+    name: exam.name,
+    status: exam.status,
+    activePhase: exam.workflowPhases.find((phase) => phase.status === "OPEN") ?? exam.workflowPhases[0] ?? null,
+    applications: exam._count.applications,
+    submissions: exam._count.sessions,
+    results: exam._count.results
+  })));
+});
+
 resultRoutes.get("/", authenticate, async (req, res) => {
   const examId = String(req.query.examId || "");
   const results = await prisma.result.findMany({
@@ -75,7 +121,11 @@ resultRoutes.get("/", authenticate, async (req, res) => {
     include: { application: { include: { candidate: { include: { user: true } }, examination: true } }, exam: true },
     orderBy: [{ rank: "asc" }, { marks: "desc" }]
   });
-  res.json(results);
+  res.json(results.map((result) => ({
+    ...result,
+    candidateName: candidateName(result.application),
+    candidateEmail: result.application.candidate.user.email
+  })));
 });
 
 resultRoutes.get("/submissions", authenticate, async (req, res) => {
@@ -108,24 +158,36 @@ resultRoutes.get("/submissions", authenticate, async (req, res) => {
   });
   const applicationById = new Map(applications.map((application) => [application.id, application]));
 
-  res.json(sessions.map((session) => ({
-    ...session,
-    application: applicationById.get(session.applicationId) ?? null
-  })));
+  res.json(sessions.map((session) => {
+    const application = applicationById.get(session.applicationId) ?? null;
+    return {
+      ...session,
+      application,
+      candidateName: application ? candidateName(application) : "Unknown Candidate",
+      candidateEmail: application?.candidate.user.email ?? null
+    };
+  }));
 });
 
 resultRoutes.post("/evaluate", authenticate, authorize("result:publish"), async (req, res) => {
-  const evaluated = await evaluateApplications(String(req.body.examId || "") || undefined);
+  const examId = String(req.body.examId || "");
+  if (!examId) return res.status(400).json({ message: "Select an examination before evaluating results" });
+
+  const evaluated = await evaluateApplications(examId);
   res.status(201).json({ evaluated: evaluated.length });
 });
 
 resultRoutes.post("/publish", authenticate, authorize("result:publish"), async (req, res) => {
   const examId = String(req.body.examId || "");
+  if (!examId) return res.status(400).json({ message: "Select an examination before publishing results" });
+
+  await evaluateApplications(examId);
   const updated = await prisma.result.updateMany({
-    where: { examId: examId || undefined },
+    where: { examId },
     data: { status: "PUBLISHED" }
   });
-  res.json({ published: updated.count });
+  const phase = await activateResultPublicationPhase(examId);
+  res.json({ published: updated.count, activePhase: phase });
 });
 
 resultRoutes.get("/:id/score-card.pdf", authenticate, async (req, res) => {

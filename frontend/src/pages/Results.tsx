@@ -8,7 +8,7 @@ type DbApplication = {
   id: string;
   applicationNo: string;
   status: string;
-  candidate: { user: { name: string } };
+  candidate: { user: { name?: string | null; email?: string | null } };
   examination: { code: string; name: string };
 };
 
@@ -20,12 +20,19 @@ type ResultRow = {
   qualified: boolean;
   status: string;
   application: DbApplication;
+  candidateName?: string | null;
+  candidateEmail?: string | null;
 };
 
 type ExaminationRow = {
   id: string;
   code: string;
   name: string;
+  status: string;
+  applications: number;
+  submissions: number;
+  results: number;
+  activePhase?: { name: string; status: string } | null;
 };
 
 type SubmissionResponse = {
@@ -47,8 +54,18 @@ type SubmissionRow = {
   submittedAt: string | null;
   applicationId: string;
   application: DbApplication | null;
+  candidateName?: string | null;
+  candidateEmail?: string | null;
   responses: SubmissionResponse[];
 };
+
+function displayCandidateName(row: { candidateName?: string | null; candidateEmail?: string | null; application?: DbApplication | null }) {
+  return row.candidateName?.trim()
+    || row.application?.candidate.user.name?.trim()
+    || row.candidateEmail
+    || row.application?.candidate.user.email
+    || "Unknown Candidate";
+}
 
 export function Results() {
   const [notice, setNotice] = usePersistentState("examPortal.results.notice", "Results are calculated. Ready for publishing.");
@@ -61,11 +78,17 @@ export function Results() {
 
   async function loadResults() {
     try {
-      const [applications, resultRows, submissionRows, examRows] = await Promise.all([
-        api<DbApplication[]>("/applications"),
-        api<ResultRow[]>(`/results${selectedExamId ? `?examId=${encodeURIComponent(selectedExamId)}` : ""}`),
-        api<SubmissionRow[]>(`/results/submissions${selectedExamId ? `?examId=${encodeURIComponent(selectedExamId)}` : ""}`),
-        api<ExaminationRow[]>("/examinations")
+      const examRows = await api<ExaminationRow[]>("/results/exams");
+      const nextExamId = examRows.some((exam) => exam.id === selectedExamId) ? selectedExamId : examRows[0]?.id;
+      if (nextExamId !== selectedExamId) {
+        setSelectedExamId(nextExamId);
+      }
+
+      const query = nextExamId ? `?examId=${encodeURIComponent(nextExamId)}` : "";
+      const [applications, resultRows, submissionRows] = await Promise.all([
+        api<DbApplication[]>(`/applications${query}`),
+        api<ResultRow[]>(`/results${query}`),
+        api<SubmissionRow[]>(`/results/submissions${query}`)
       ]);
       setDbRows(applications);
       setResults(resultRows);
@@ -75,7 +98,8 @@ export function Results() {
         if (submissionRows.some((item) => item.id === current)) return current;
         return submissionRows[0]?.id ?? "";
       });
-      setNotice(`${resultRows.length} result(s) loaded from database.`);
+      const selectedExam = examRows.find((exam) => exam.id === nextExamId);
+      setNotice(selectedExam ? `${selectedExam.code}: ${submissionRows.length} submitted answer sheet(s), ${resultRows.length} result(s).` : "No live examination is available for result processing.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not load result data.");
     }
@@ -86,8 +110,13 @@ export function Results() {
   }, [selectedExamId]);
 
   const selectedSubmission = useMemo(() => submissions.find((item) => item.id === selectedSubmissionId) ?? submissions[0] ?? null, [submissions, selectedSubmissionId]);
+  const selectedExam = useMemo(() => exams.find((exam) => exam.id === selectedExamId) ?? null, [exams, selectedExamId]);
 
   async function recalculate() {
+    if (!selectedExamId) {
+      setNotice("Select a live examination before evaluating submitted answers.");
+      return;
+    }
     try {
       const evaluated = await api<{ evaluated: number }>("/results/evaluate", { method: "POST", body: JSON.stringify({ examId: selectedExamId ?? "" }) });
       setNotice(`${evaluated.evaluated} submitted exam(s) evaluated in the database.`);
@@ -98,9 +127,13 @@ export function Results() {
   }
 
   async function publishResults() {
+    if (!selectedExamId) {
+      setNotice("Select a live examination before publishing results.");
+      return;
+    }
     try {
-      const published = await api<{ published: number }>("/results/publish", { method: "POST", body: JSON.stringify({ examId: selectedExamId ?? "" }) });
-      setNotice(`${published.published} result(s) published live to candidate portal.`);
+      const published = await api<{ published: number; activePhase?: { name: string } | null }>("/results/publish", { method: "POST", body: JSON.stringify({ examId: selectedExamId ?? "" }) });
+      setNotice(`${published.published} result(s) published live to candidate portal. Phase changed to ${published.activePhase?.name ?? "Result Publication"}.`);
       await loadResults();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Result publication failed.");
@@ -133,13 +166,21 @@ export function Results() {
         <div><h1 className="text-2xl font-bold">Results Processing</h1><p className="text-sm text-slate-500">Calculate normalized scores, compile merit lists, and publish candidate score cards.</p></div>
         <div className="flex flex-wrap items-center gap-2">
           <Select className="min-w-56" value={selectedExamId ?? ""} onChange={(event) => setSelectedExamId(event.target.value || undefined)}>
-            <option value="">All Exams</option>
-            {exams.map((exam) => <option key={exam.id} value={exam.id}>{exam.code} - {exam.name}</option>)}
+            <option value="">Select live exam</option>
+            {exams.map((exam) => <option key={exam.id} value={exam.id}>{exam.code} - {exam.name} ({exam.submissions} submitted)</option>)}
           </Select>
-          <Button className="bg-secondary" onClick={recalculate}><RefreshCw size={18} /> Evaluate</Button>
-          <Button onClick={publishResults}><Trophy size={18} /> Publish Results</Button>
+          <Button className="bg-secondary" disabled={!selectedExamId} onClick={recalculate}><RefreshCw size={18} /> Evaluate</Button>
+          <Button disabled={!selectedExamId || !results.length} onClick={publishResults}><Trophy size={18} /> Publish Results</Button>
         </div>
       </div>
+      {selectedExam && <Card className="grid gap-3 md:grid-cols-4">
+        {[
+          `Selected: ${selectedExam.code}`,
+          `Phase: ${selectedExam.activePhase?.name ?? "Not scheduled"}`,
+          `Submitted: ${selectedExam.submissions}`,
+          `Results: ${selectedExam.results}`
+        ].map((item) => <div className="rounded-md bg-muted p-4 font-semibold" key={item}>{item}</div>)}
+      </Card>}
       <Card className="grid gap-3 md:grid-cols-4">
         {["Applications: " + dbRows.length, "Evaluated: " + results.length, "Passed: " + results.filter((result) => result.qualified).length, "Published: " + results.filter((result) => result.status === "PUBLISHED").length].map((item) => (
           <div className="rounded-md bg-muted p-4 font-semibold" key={item}>{item}</div>
@@ -154,7 +195,7 @@ export function Results() {
             return (
               <tr className="border-t border-border" key={result.id}>
                 <td className="p-3 font-semibold">{result.application.applicationNo}</td>
-                <td className="p-3">{result.application.candidate.user.name}</td>
+                <td className="p-3">{displayCandidateName(result)}</td>
                 <td className="p-3">{result.application.examination.code}</td>
                 <td className="p-3 font-semibold">{result.marks}</td>
                 <td className="p-3">
@@ -189,7 +230,7 @@ export function Results() {
               return (
                 <tr className={`border-t border-border ${selectedSubmissionId === submission.id ? "bg-muted/60" : ""}`} key={submission.id}>
                   <td className="p-3 font-semibold">{submission.application?.applicationNo ?? submission.applicationId}</td>
-                  <td className="p-3">{submission.application?.candidate.user.name ?? "Unknown"}</td>
+                  <td className="p-3">{displayCandidateName(submission)}</td>
                   <td className="p-3">{submission.application?.examination.code ?? "Unknown"}</td>
                   <td className="p-3">{submission.submittedAt ? new Date(submission.submittedAt).toLocaleString() : "Not available"}</td>
                   <td className="p-3">{answered}</td>
@@ -213,7 +254,7 @@ export function Results() {
         ) : (
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-4 text-sm">
-              <div className="rounded-md bg-muted p-3"><p className="text-slate-500">Candidate</p><p className="font-semibold">{selectedSubmission.application?.candidate.user.name ?? "Unknown"}</p></div>
+              <div className="rounded-md bg-muted p-3"><p className="text-slate-500">Candidate</p><p className="font-semibold">{displayCandidateName(selectedSubmission)}</p></div>
               <div className="rounded-md bg-muted p-3"><p className="text-slate-500">Exam</p><p className="font-semibold">{selectedSubmission.application?.examination.code ?? "Unknown"}</p></div>
               <div className="rounded-md bg-muted p-3"><p className="text-slate-500">Submitted</p><p className="font-semibold">{selectedSubmission.submittedAt ? new Date(selectedSubmission.submittedAt).toLocaleString() : "Not available"}</p></div>
               <div className="rounded-md bg-muted p-3"><p className="text-slate-500">Answered</p><p className="font-semibold">{selectedSubmission.responses.length}</p></div>
