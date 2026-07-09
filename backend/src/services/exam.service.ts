@@ -160,7 +160,7 @@ export async function getCandidatePhaseSnapshot(examId?: string) {
   };
 
   return {
-    exam: { id: exam.id, code: exam.code, name: exam.name },
+    exam: { id: exam.id, code: exam.code, name: exam.name, durationMinutes: exam.durationMinutes },
     activePhase,
     access,
     phases: exam.workflowPhases

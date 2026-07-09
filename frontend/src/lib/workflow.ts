@@ -5,6 +5,7 @@ export type CandidatePhaseSnapshot = {
     id: string;
     code: string;
     name: string;
+    durationMinutes: number;
   };
   activePhase?: {
     id: string;
@@ -54,7 +55,7 @@ export type LiveExam = {
 };
 
 export const fallbackPhase: CandidatePhaseSnapshot = {
-  exam: { id: "none", code: "NOT-CONFIGURED", name: "No active examination" },
+  exam: { id: "none", code: "NOT-CONFIGURED", name: "No active examination", durationMinutes: 0 },
   activePhase: { id: "none", name: "Registration", status: "CLOSED", opensAt: "", closesAt: "" },
   access: {
     registration: true,

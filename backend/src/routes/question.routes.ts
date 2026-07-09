@@ -157,7 +157,8 @@ questionRoutes.post("/online/start", authenticate, async (req: AuthRequest, res)
   });
 
   if (existing?.status === "SUBMITTED") {
-    return res.json({ sessionId: existing.id, startedAt: existing.startedAt, submittedAt: existing.submittedAt, submitted: true });
+    const answered = await prisma.candidateResponse.count({ where: { sessionId: existing.id } });
+    return res.json({ sessionId: existing.id, startedAt: existing.startedAt, submittedAt: existing.submittedAt, submitted: true, answered });
   }
 
   const session = existing ?? await prisma.examSession.create({
@@ -248,5 +249,9 @@ questionRoutes.post("/online/submit", authenticate, async (req: AuthRequest, res
     });
   }
 
-  res.status(existing?.status === "SUBMITTED" ? 200 : 201).json({ sessionId: session.id, submitted: true, answered: existing?.status === "SUBMITTED" ? existing.responses.length : Object.keys(answers).length });
+  const answered = existing?.status === "SUBMITTED"
+    ? await prisma.candidateResponse.count({ where: { sessionId: session.id } })
+    : Object.keys(answers).length;
+
+  res.status(existing?.status === "SUBMITTED" ? 200 : 201).json({ sessionId: session.id, submitted: true, answered });
 });
