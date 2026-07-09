@@ -1,12 +1,28 @@
-import { Flag, Save, Send } from "lucide-react";
+import { Flag, LogOut, Save, Send } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import { Button, Card } from "../components/ui";
 
 const numbers = Array.from({ length: 30 }, (_, i) => i + 1);
 
 export function OnlineExam() {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+
+  function handleLogout() {
+    logout();
+    navigate("/login", { replace: true });
+  }
+
   return (
     <main className="min-h-screen bg-background">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card p-4"><div><h1 className="font-bold">National Recruitment Examination</h1><p className="text-sm text-slate-500">Section A: General Studies</p></div><div className="rounded-md bg-destructive px-4 py-2 font-bold text-white">01:24:36</div></header>
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card p-4">
+        <div><h1 className="font-bold">National Recruitment Examination</h1><p className="text-sm text-slate-500">Section A: General Studies</p></div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="rounded-md bg-destructive px-4 py-2 font-bold text-white">01:24:36</div>
+          <Button className="bg-slate-800" onClick={handleLogout}><LogOut size={18} /> Logout</Button>
+        </div>
+      </header>
       <div className="grid gap-4 p-4 lg:grid-cols-[1fr_320px]">
         <Card>
           <div className="mb-4 flex items-center justify-between"><h2 className="font-semibold">Question 12</h2><span className="text-sm text-slate-500">Marks 2, Negative 0.5</span></div>

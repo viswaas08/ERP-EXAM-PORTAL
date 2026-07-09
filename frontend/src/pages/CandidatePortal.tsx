@@ -1,16 +1,32 @@
-import { CheckCircle2, FileText, Upload } from "lucide-react";
-import { Link } from "react-router-dom";
+import { CheckCircle2, FileText, LogOut, Upload } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import { Button, Card, Input, Select } from "../components/ui";
 
 const steps = ["Personal Details", "Address", "Education", "Experience", "Preferences", "Documents", "Preview", "Submit"];
 
 export function CandidatePortal() {
+  const { isAuthenticated, logout } = useAuth();
+  const navigate = useNavigate();
+
+  function handleLogout() {
+    logout();
+    navigate("/login", { replace: true });
+  }
+
   return (
     <main className="min-h-screen bg-background p-4 md:p-8">
       <div className="mx-auto max-w-6xl space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><h1 className="text-2xl font-bold">Candidate Registration</h1><p className="text-sm text-slate-500">Multi-step application wizard generated from admin-configured fields.</p></div>
-          <Link to="/candidate"><Button>Open Dashboard</Button></Link>
+          <div className="flex flex-wrap gap-2">
+            <Link to="/candidate"><Button>Open Dashboard</Button></Link>
+            {isAuthenticated ? (
+              <Button className="bg-destructive" onClick={handleLogout}><LogOut size={18} /> Logout</Button>
+            ) : (
+              <Link to="/login"><Button className="bg-secondary">Login</Button></Link>
+            )}
+          </div>
         </div>
         <Card className="grid gap-2 md:grid-cols-8">{steps.map((step, i) => <div className="rounded-md bg-muted p-3 text-sm font-semibold" key={step}>{i + 1}. {step}</div>)}</Card>
         <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
