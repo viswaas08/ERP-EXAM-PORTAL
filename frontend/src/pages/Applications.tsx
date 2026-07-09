@@ -1,31 +1,46 @@
 import { Download, Eye, Filter, RotateCcw } from "lucide-react";
-import { useMemo } from "react";
-import { applications } from "../data/demo";
+import { useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, Input, Select, Table } from "../components/ui";
-import { usePersistentState } from "../lib/usePersistentState";
-import { setStoredApplicationStatus, type StoredApplication } from "../lib/erpStorage";
+import { api } from "../lib/api";
+
+type ApplicationRow = {
+  id: string;
+  applicationNo: string;
+  status: string;
+  candidate: { user: { name: string }; profile?: { category?: string; state?: string; percentage?: number } | null };
+  examination: { code: string; name: string };
+};
 
 export function Applications() {
-  const [rows, setRows] = usePersistentState<StoredApplication[]>("examPortal.applications.rows", applications);
-  const [query, setQuery] = usePersistentState("examPortal.applications.query", "");
-  const [examFilter, setExamFilter] = usePersistentState("examPortal.applications.examFilter", "All Exams");
-  const [status, setStatus] = usePersistentState("examPortal.applications.status", "All Statuses");
-  const [category, setCategory] = usePersistentState("examPortal.applications.category", "All Categories");
-  const [selectedId, setSelectedId] = usePersistentState("examPortal.applications.selectedId", rows[0]?.id ?? "");
-  const [notice, setNotice] = usePersistentState("examPortal.applications.notice", "Select an application to review candidate details.");
+  const [rows, setRows] = useState<ApplicationRow[]>([]);
+  const [query, setQuery] = useState("");
+  const [examFilter, setExamFilter] = useState("All Exams");
+  const [status, setStatus] = useState("All Statuses");
+  const [selectedId, setSelectedId] = useState("");
+  const [notice, setNotice] = useState("Applications load from the database.");
+
+  useEffect(() => {
+    api<ApplicationRow[]>("/applications")
+      .then((data) => {
+        setRows(data);
+        setSelectedId(data[0]?.id ?? "");
+        setNotice(`${data.length} database application(s) loaded.`);
+      })
+      .catch((error) => setNotice(error instanceof Error ? error.message : "Could not load applications."));
+  }, []);
 
   const filteredRows = useMemo(() => rows.filter((app) => {
-    const queryMatch = `${app.name} ${app.id}`.toLowerCase().includes(query.toLowerCase());
-    const examMatch = examFilter === "All Exams" || app.exam === examFilter;
-    const statusMatch = status === "All Statuses" || app.status === status;
-    const categoryMatch = category === "All Categories" || app.category === category;
-    return queryMatch && examMatch && statusMatch && categoryMatch;
-  }), [rows, query, examFilter, status, category]);
+    const text = `${app.applicationNo} ${app.candidate.user.name}`.toLowerCase();
+    const queryMatch = text.includes(query.toLowerCase());
+    const examMatch = examFilter === "All Exams" || app.examination.code === examFilter;
+    const statusMatch = status === "All Statuses" || app.status === status.toUpperCase();
+    return queryMatch && examMatch && statusMatch;
+  }), [rows, query, examFilter, status]);
 
   const selected = rows.find((app) => app.id === selectedId);
 
   function exportCsv() {
-    const csv = ["Application,Candidate,Exam,Category,State,Score,Status", ...filteredRows.map((app) => `${app.id},${app.name},${app.exam},${app.category},${app.state},${app.score},${app.status}`)].join("\n");
+    const csv = ["Application,Candidate,Exam,Status", ...filteredRows.map((app) => `${app.applicationNo},${app.candidate.user.name},${app.examination.code},${app.status}`)].join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     const link = document.createElement("a");
     link.href = url;
@@ -35,21 +50,25 @@ export function Applications() {
     setNotice(`Exported ${filteredRows.length} application(s) to CSV.`);
   }
 
-  function returnForCorrection(id: string) {
-    setRows(setStoredApplicationStatus(id, "Returned"));
+  async function updateStatus(id: string, nextStatus: string) {
+    const updated = await api<{ id: string; status: string }>(`/applications/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: nextStatus, remarks: `Marked ${nextStatus} from admin portal` })
+    });
+    setRows((current) => current.map((app) => app.id === id ? { ...app, status: updated.status } : app));
     setSelectedId(id);
-    setNotice(`${id} returned for correction with remarks.`);
+    setNotice(`Application status updated to ${nextStatus}.`);
   }
 
   return (
     <section className="space-y-5">
       <Card className="border-l-4 border-l-primary py-3 text-sm font-medium">{notice}</Card>
-      <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">Application Management</h1><p className="text-sm text-slate-500">Search, filter, bulk process, export, and review candidate records.</p></div><Button onClick={exportCsv}><Download size={18} /> Export</Button></div>
-      <Card className="grid gap-3 md:grid-cols-5"><Input placeholder="Search candidate" value={query} onChange={(event) => setQuery(event.target.value)} /><Select value={examFilter} onChange={(event) => setExamFilter(event.target.value)}><option>All Exams</option><option>NRE-2026</option><option>SET-2026</option><option>TEC-2026</option><option>University Entrance Test</option><option>Public Service Preliminary</option></Select><Select value={status} onChange={(event) => setStatus(event.target.value)}><option>All Statuses</option><option>Approved</option><option>Pending</option><option>Returned</option><option>Rejected</option><option>Hold</option><option>Correction Required</option><option>Hall Ticket Ready</option><option>Result Published</option></Select><Select value={category} onChange={(event) => setCategory(event.target.value)}><option>All Categories</option><option>General</option><option>OBC</option><option>SC</option><option>ST</option><option>EWS</option><option>PwD</option><option>Ex-Servicemen</option></Select><Button className="bg-secondary" onClick={() => setNotice(`${filteredRows.length} application(s) found.`)}><Filter size={18} /> Filter</Button></Card>
-      {selected && <Card><h2 className="mb-2 font-semibold">Review Panel</h2><p className="text-sm">{selected.name} · {selected.id} · {selected.exam} · Current status: <strong>{selected.status}</strong></p></Card>}
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">Application Management</h1><p className="text-sm text-slate-500">Database-backed application review and export.</p></div><Button onClick={exportCsv}><Download size={18} /> Export</Button></div>
+      <Card className="grid gap-3 md:grid-cols-5"><Input placeholder="Search candidate" value={query} onChange={(event) => setQuery(event.target.value)} /><Select value={examFilter} onChange={(event) => setExamFilter(event.target.value)}><option>All Exams</option>{[...new Set(rows.map((app) => app.examination.code))].map((code) => <option key={code}>{code}</option>)}</Select><Select value={status} onChange={(event) => setStatus(event.target.value)}><option>All Statuses</option><option>PENDING</option><option>APPROVED</option><option>RETURNED</option><option>REJECTED</option><option>HOLD</option></Select><Button className="bg-secondary" onClick={() => setNotice(`${filteredRows.length} application(s) found.`)}><Filter size={18} /> Filter</Button></Card>
+      {selected && <Card><h2 className="mb-2 font-semibold">Review Panel</h2><p className="text-sm">{selected.candidate.user.name} · {selected.applicationNo} · {selected.examination.code} · Current status: <strong>{selected.status}</strong></p><div className="mt-3 flex flex-wrap gap-2"><Button className="bg-emerald-600" onClick={() => updateStatus(selected.id, "APPROVED")}>Approve</Button><Button className="bg-destructive" onClick={() => updateStatus(selected.id, "REJECTED")}>Reject</Button><Button className="bg-secondary" onClick={() => updateStatus(selected.id, "RETURNED")}>Return For Correction</Button></div></Card>}
       <Table>
-        <thead className="bg-muted"><tr>{["Application", "Candidate", "Exam", "Category", "State", "Score", "Status", "Action"].map((h) => <th className="p-3" key={h}>{h}</th>)}</tr></thead>
-        <tbody>{filteredRows.map((app) => <tr className={`border-t border-border ${selectedId === app.id ? "bg-muted/60" : ""}`} key={app.id}><td className="p-3 font-semibold">{app.id}</td><td className="p-3">{app.name}</td><td className="p-3">{app.exam}</td><td className="p-3">{app.category}</td><td className="p-3">{app.state}</td><td className="p-3">{app.score}%</td><td className="p-3"><Badge>{app.status}</Badge></td><td className="p-3"><div className="flex gap-2"><Button className="h-8 w-8 px-0" onClick={() => { setSelectedId(app.id); setNotice(`${app.id} opened in review panel.`); }}><Eye size={15} /></Button><Button className="h-8 w-8 bg-secondary px-0" onClick={() => returnForCorrection(app.id)}><RotateCcw size={15} /></Button></div></td></tr>)}{!filteredRows.length && <tr><td className="p-6 text-center text-slate-500" colSpan={8}>No candidate applications are seeded. New submissions will appear here.</td></tr>}</tbody>
+        <thead className="bg-muted"><tr>{["Application", "Candidate", "Exam", "Status", "Action"].map((h) => <th className="p-3" key={h}>{h}</th>)}</tr></thead>
+        <tbody>{filteredRows.map((app) => <tr className={`border-t border-border ${selectedId === app.id ? "bg-muted/60" : ""}`} key={app.id}><td className="p-3 font-semibold">{app.applicationNo}</td><td className="p-3">{app.candidate.user.name}</td><td className="p-3">{app.examination.code}</td><td className="p-3"><Badge>{app.status}</Badge></td><td className="p-3"><div className="flex gap-2"><Button className="h-8 w-8 px-0" onClick={() => { setSelectedId(app.id); setNotice(`${app.applicationNo} opened in review panel.`); }}><Eye size={15} /></Button><Button className="h-8 w-8 bg-secondary px-0" onClick={() => updateStatus(app.id, "RETURNED")}><RotateCcw size={15} /></Button></div></td></tr>)}{!filteredRows.length && <tr><td className="p-6 text-center text-slate-500" colSpan={5}>No candidate applications found in the database.</td></tr>}</tbody>
       </Table>
     </section>
   );

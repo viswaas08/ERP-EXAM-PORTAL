@@ -26,14 +26,14 @@ export type CandidatePhaseSnapshot = {
 };
 
 export const fallbackPhase: CandidatePhaseSnapshot = {
-  exam: { id: "demo", code: "NRE-2026", name: "National Recruitment Examination" },
-  activePhase: { id: "demo-phase", name: "Hall Ticket Release", status: "OPEN", opensAt: "", closesAt: "" },
+  exam: { id: "none", code: "NOT-CONFIGURED", name: "No active examination" },
+  activePhase: { id: "none", name: "Registration", status: "CLOSED", opensAt: "", closesAt: "" },
   access: {
-    registration: false,
+    registration: true,
     correction: false,
     documentVerification: false,
     eligibilityVerification: false,
-    hallTicket: true,
+    hallTicket: false,
     onlineExam: false,
     result: false,
     archiveDownloads: false

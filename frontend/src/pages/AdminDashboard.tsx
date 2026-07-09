@@ -1,19 +1,61 @@
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { registrationTrend, stats, statusData } from "../data/demo";
+import { useEffect, useState } from "react";
+import { registrationTrend, stats } from "../data/demo";
 import { Card } from "../components/ui";
 import { formatNumber } from "../lib/utils";
+import { api } from "../lib/api";
 
 const colors = ["#059669", "#f59e0b", "#dc2626"];
 
+type DashboardSummary = {
+  examinations: number;
+  candidates: number;
+  applications: number;
+  approved: number;
+  pending: number;
+  rejected: number;
+  hallTickets: number;
+  results: number;
+};
+
 export function AdminDashboard() {
+  const [summary, setSummary] = useState<DashboardSummary>({
+    examinations: 0,
+    candidates: 0,
+    applications: 0,
+    approved: 0,
+    pending: 0,
+    rejected: 0,
+    hallTickets: 0,
+    results: 0
+  });
+  const [notice, setNotice] = useState("Dashboard summary loads from the database.");
+
+  useEffect(() => {
+    api<DashboardSummary>("/dashboard/summary")
+      .then((data) => {
+        setSummary(data);
+        setNotice("Live database summary loaded.");
+      })
+      .catch((error) => setNotice(error instanceof Error ? error.message : "Could not load dashboard summary."));
+  }, []);
+
+  const statValues = [summary.examinations, summary.candidates, summary.applications, summary.approved, summary.pending, summary.rejected, summary.hallTickets, summary.results];
+  const liveStats = stats.map((stat, index) => ({ ...stat, value: statValues[index] ?? 0 }));
+  const statusData = [
+    { name: "Approved", value: summary.approved },
+    { name: "Pending", value: summary.pending },
+    { name: "Rejected", value: summary.rejected }
+  ];
+
   return (
     <section className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-        <p className="text-sm text-slate-500">Live operational overview across examinations, applications, centres, and results.</p>
+        <p className="text-sm text-slate-500">{notice}</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map((stat) => (
+        {liveStats.map((stat) => (
           <Card key={stat.label}>
             <div className="flex items-center justify-between">
               <div>

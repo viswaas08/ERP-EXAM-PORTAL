@@ -34,7 +34,7 @@ export const navItems = [
 ];
 
 export const stats = [
-  { label: "Total Examinations", value: 10, icon: GraduationCap, tone: "text-blue-700" },
+  { label: "Total Examinations", value: 0, icon: GraduationCap, tone: "text-blue-700" },
   { label: "Total Candidates", value: 0, icon: Users, tone: "text-teal-700" },
   { label: "Applications", value: 0, icon: FileText, tone: "text-amber-700" },
   { label: "Approved", value: 0, icon: BadgeCheck, tone: "text-emerald-700" },
@@ -45,13 +45,13 @@ export const stats = [
 ];
 
 export const registrationTrend = [
-  { day: "Mon", registrations: 48, approved: 31 },
-  { day: "Tue", registrations: 63, approved: 44 },
-  { day: "Wed", registrations: 82, approved: 59 },
-  { day: "Thu", registrations: 74, approved: 51 },
-  { day: "Fri", registrations: 96, approved: 67 },
-  { day: "Sat", registrations: 52, approved: 38 },
-  { day: "Sun", registrations: 85, approved: 61 }
+  { day: "Mon", registrations: 0, approved: 0 },
+  { day: "Tue", registrations: 0, approved: 0 },
+  { day: "Wed", registrations: 0, approved: 0 },
+  { day: "Thu", registrations: 0, approved: 0 },
+  { day: "Fri", registrations: 0, approved: 0 },
+  { day: "Sat", registrations: 0, approved: 0 },
+  { day: "Sun", registrations: 0, approved: 0 }
 ];
 
 export const statusData = [
@@ -62,31 +62,13 @@ export const statusData = [
 
 export const exams = [
   {
-    code: "NRE-2026",
-    name: "National Recruitment Examination",
-    department: "Administrative Services",
-    phase: "Verification",
-    dates: "12 Aug 2026 - 18 Aug 2026",
-    applications: 0,
-    status: "Active"
-  },
-  {
-    code: "SET-2026",
-    name: "State Eligibility Test",
-    department: "Higher Education",
-    phase: "Hall Ticket Release",
-    dates: "02 Sep 2026",
-    applications: 0,
-    status: "Active"
-  },
-  {
-    code: "TEC-2026",
-    name: "Technical Engineer Cadre",
-    department: "Public Works",
+    code: "CREATE-FIRST",
+    name: "Create an examination from Admin",
+    department: "Not configured",
     phase: "Registration",
-    dates: "01 Jul 2026 - 31 Jul 2026",
+    dates: "Schedule pending",
     applications: 0,
-    status: "Open"
+    status: "Draft"
   }
 ];
 

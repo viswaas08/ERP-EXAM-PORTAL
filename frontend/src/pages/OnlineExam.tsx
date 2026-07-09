@@ -12,11 +12,11 @@ const options = ["Election Commission", "Union Public Service Commission", "Fina
 export function OnlineExam() {
   const { logout } = useAuth();
   const navigate = useNavigate();
-  const [current, setCurrent] = usePersistentState("examPortal.onlineExam.current", 12);
-  const [answers, setAnswers] = usePersistentState<Record<number, string>>("examPortal.onlineExam.answers", { 12: "Union Public Service Commission" });
-  const [marked, setMarked] = usePersistentState<number[]>("examPortal.onlineExam.marked", [5, 9]);
-  const [submitted, setSubmitted] = usePersistentState("examPortal.onlineExam.submitted", false);
-  const [notice, setNotice] = usePersistentState("examPortal.onlineExam.notice", "Question 12 auto-saved just now.");
+  const [current, setCurrent] = usePersistentState("examPortal.onlineExam.v2.current", 1);
+  const [answers, setAnswers] = usePersistentState<Record<number, string>>("examPortal.onlineExam.v2.answers", {});
+  const [marked, setMarked] = usePersistentState<number[]>("examPortal.onlineExam.v2.marked", []);
+  const [submitted, setSubmitted] = usePersistentState("examPortal.onlineExam.v2.submitted", false);
+  const [notice, setNotice] = usePersistentState("examPortal.onlineExam.v2.notice", "Exam console is locked until the online examination phase is active.");
   const [phase, setPhase] = useState<CandidatePhaseSnapshot>(fallbackPhase);
 
   const attempted = useMemo(() => Object.keys(answers).length, [answers]);
@@ -27,7 +27,7 @@ export function OnlineExam() {
         setPhase(snapshot);
         setNotice(snapshot.access.onlineExam ? "Online examination phase is active." : `Exam locked during ${snapshot.activePhase?.name}.`);
       })
-      .catch(() => setNotice("Using demo phase state because the workflow API is not reachable."));
+      .catch(() => setNotice("Workflow service is not reachable. Exam console remains locked."));
   }, []);
 
   function handleLogout() {

@@ -46,9 +46,9 @@ export function Login() {
               <p className="mt-5 max-w-2xl text-lg text-white/82">Configure examinations, dynamic forms, eligibility rules, centre allocation, hall tickets, question banks, online tests, and score cards without touching code.</p>
               <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {[
-                  { label: "500 candidates", icon: UsersRound },
-                  { label: "10 exams", icon: GraduationCap },
-                  { label: "500 tickets", icon: TicketCheck },
+                  { label: "Candidate self-service", icon: UsersRound },
+                  { label: "Configurable exams", icon: GraduationCap },
+                  { label: "Verified tickets", icon: TicketCheck },
                   { label: "Live analytics", icon: BarChart3 }
                 ].map((item) => (
                   <div className="rounded-lg border border-white/20 bg-white/10 p-4 backdrop-blur" key={item.label}>
@@ -80,8 +80,8 @@ export function Login() {
               <Button className="w-full" disabled={loading}>{loading ? "Signing in..." : "Login"} <ArrowRight size={18} /></Button>
             </form>
             <div className="mt-5 grid gap-2 text-sm">
-              <button className="rounded-md border border-border p-2 text-left hover:bg-muted" onClick={() => { setEmail("admin@exam.gov"); setPassword("Password@123"); }}>Use Super Admin demo</button>
-              <button className="rounded-md border border-border p-2 text-left hover:bg-muted" onClick={() => { setEmail("candidate@exam.gov"); setPassword("Password@123"); }}>Use Candidate demo</button>
+              <button className="rounded-md border border-border p-2 text-left hover:bg-muted" onClick={() => { setEmail("admin@exam.gov"); setPassword("Password@123"); }}>Use seeded Super Admin</button>
+              <p className="rounded-md bg-muted p-2 text-slate-600">Candidates must register first, then login with their own email and password.</p>
             </div>
             <div className="mt-5 flex flex-wrap justify-between gap-2 text-sm font-semibold text-primary">
               <Link to="/register">New candidate registration</Link>

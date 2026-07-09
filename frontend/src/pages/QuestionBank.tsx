@@ -18,7 +18,7 @@ export function QuestionBank() {
   const [questionType, setQuestionType] = usePersistentState("examPortal.questions.type", "All Types");
 
   function addQuestion() {
-    const next = `New sample question ${rows.length + 1}?`;
+    const next = `New draft question ${rows.length + 1}?`;
     setRows((current) => [next, ...current]);
     setNotice("New MCQ question added as draft.");
   }

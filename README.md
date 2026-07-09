@@ -1,6 +1,6 @@
 # Centralized Competitive Examination Management Portal
 
-Enterprise-grade demo portal for managing competitive examinations from registration through result publication.
+Enterprise-grade portal for managing competitive examinations from registration through result publication.
 
 ## Stack
 
@@ -45,11 +45,11 @@ Frontend: `http://localhost:5173`
 
 Backend: `http://localhost:8080/api`
 
-## Demo Users
+## Seeded Access
 
 - Super Admin: `admin@exam.gov` / `Password@123`
-- Controller: `controller@exam.gov` / `Password@123`
-- Candidate: `candidate@exam.gov` / `Password@123`
+- Candidates are not seeded. They must register first, then login with the email and password used during registration.
+- Examinations and applications are not seeded. Create examinations from the admin portal before opening public registration.
 
 ## Deployment
 

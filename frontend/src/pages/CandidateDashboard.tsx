@@ -5,7 +5,7 @@ import { useAuth } from "../auth/AuthContext";
 import { Badge, Button, Card } from "../components/ui";
 import { fallbackPhase, getCandidatePhase, type CandidatePhaseSnapshot } from "../lib/workflow";
 import { usePersistentState } from "../lib/usePersistentState";
-import { api } from "../lib/api";
+import { API_URL, api } from "../lib/api";
 
 const timeline = ["Submitted", "Verification", "Approved", "Hall Ticket Released", "Examination", "Evaluation", "Result Published"];
 
@@ -23,7 +23,7 @@ type CandidateDashboardData = {
     status: string;
     examination: { name: string; code: string };
     documents: Array<{ type: string; status: string }>;
-    hallTicket: null | { rollNumber: string; seatNumber: string; reportingTime: string; centre: { name: string } };
+    hallTicket: null | { id: string; rollNumber: string; seatNumber: string; reportingTime: string; centre: { name: string } };
     result: null | { marks: number; percentage: number; rank: number; qualified: boolean };
   };
   phase: CandidatePhaseSnapshot;
@@ -32,7 +32,7 @@ type CandidateDashboardData = {
 export function CandidateDashboard() {
   const { logout } = useAuth();
   const navigate = useNavigate();
-  const [notice, setNotice] = usePersistentState("examPortal.candidateDashboard.notice", "Welcome back. Hall ticket is ready for download.");
+  const [notice, setNotice] = usePersistentState("examPortal.candidateDashboard.v2.notice", "Candidate dashboard loads from the database.");
   const [resultVisible, setResultVisible] = usePersistentState("examPortal.candidateDashboard.resultVisible", false);
   const [timelineIndex, setTimelineIndex] = usePersistentState("examPortal.candidateDashboard.timelineIndex", 3);
   const [phase, setPhase] = useState<CandidatePhaseSnapshot>(fallbackPhase);
@@ -53,7 +53,7 @@ export function CandidateDashboard() {
             setPhase(snapshot);
             setNotice("Login as candidate to load database dashboard. Showing phase access only.");
           })
-          .catch(() => setNotice("Using demo phase state because the workflow API is not reachable."));
+          .catch(() => setNotice("Workflow service is not reachable. Login again when the backend is available."));
       });
   }, []);
 
@@ -69,6 +69,27 @@ export function CandidateDashboard() {
     link.download = name;
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function downloadHallTicketPdf() {
+    const ticket = dashboard?.application?.hallTicket;
+    if (!ticket) return;
+    try {
+      const token = localStorage.getItem("accessToken");
+      const response = await fetch(`${API_URL}/api/hall-tickets/${ticket.id}.pdf`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (!response.ok) throw new Error("PDF download failed");
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${dashboard?.application?.applicationNo ?? "hall-ticket"}-hall-ticket.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setNotice("Hall ticket PDF downloaded.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Hall ticket PDF download failed.");
+    }
   }
 
   return (
@@ -90,7 +111,7 @@ export function CandidateDashboard() {
         ].map((item) => <Card key={item}><p className="font-semibold">{item}</p></Card>)}</div>
         <Card><h2 className="mb-4 font-semibold">Application Timeline</h2><div className="grid gap-2 md:grid-cols-7">{timeline.map((item, i) => <button className={`rounded-md border border-border p-3 text-left ${i === timelineIndex ? "bg-primary text-white" : ""}`} key={item} onClick={() => { setTimelineIndex(i); setNotice(`${item} timeline stage opened.`); }}><Badge>{i <= timelineIndex ? "Done" : "Pending"}</Badge><p className="mt-2 text-sm font-semibold">{item}</p></button>)}</div></Card>
         <div className="grid gap-4 md:grid-cols-3">
-          <Card><Ticket className="mb-3 text-primary" /><h2 className="font-semibold">Hall Ticket</h2><p className="my-3 text-sm text-slate-500">{dashboard?.application?.hallTicket ? `Roll No ${dashboard.application.hallTicket.rollNumber}, ${dashboard.application.hallTicket.centre.name}.` : phase.access.hallTicket ? "Hall ticket phase is active, but no ticket generated yet." : `Locked during ${phase.activePhase?.name}.`}</p><Button disabled={(!phase.access.hallTicket && !phase.access.archiveDownloads) || !dashboard?.application?.hallTicket} onClick={() => { downloadFile("hall-ticket.txt", `Hall Ticket\nRoll No: ${dashboard?.application?.hallTicket?.rollNumber}\nCentre: ${dashboard?.application?.hallTicket?.centre.name}`); setNotice("Hall ticket downloaded."); }}><Download size={18} /> Download PDF</Button></Card>
+          <Card><Ticket className="mb-3 text-primary" /><h2 className="font-semibold">Hall Ticket</h2><p className="my-3 text-sm text-slate-500">{dashboard?.application?.hallTicket ? `Roll No ${dashboard.application.hallTicket.rollNumber}, ${dashboard.application.hallTicket.centre.name}.` : phase.access.hallTicket ? "Hall ticket phase is active, but no ticket generated yet." : `Locked during ${phase.activePhase?.name}.`}</p><Button disabled={(!phase.access.hallTicket && !phase.access.archiveDownloads) || !dashboard?.application?.hallTicket} onClick={downloadHallTicketPdf}><Download size={18} /> Download PDF</Button></Card>
           <Card><MonitorPlay className="mb-3 text-secondary" /><h2 className="font-semibold">Online Examination</h2><p className="my-3 text-sm text-slate-500">{phase.access.onlineExam ? "Exam console is enabled for the active phase." : `Exam locked during ${phase.activePhase?.name}.`}</p><div className="flex flex-wrap gap-2"><Button className="bg-secondary" disabled={!phase.access.onlineExam} onClick={() => setNotice("System check passed. Browser, keyboard, and timer are ready.")}>System Check</Button>{phase.access.onlineExam ? <Link to="/exam"><Button>Open Exam Console</Button></Link> : <Button disabled>Open Exam Console</Button>}</div></Card>
           <Card><FileText className="mb-3 text-amber-600" /><h2 className="font-semibold">Result</h2><p className="my-3 text-sm text-slate-500">{resultVisible && dashboard?.application?.result ? `Marks ${dashboard.application.result.marks}, Rank ${dashboard.application.result.rank}, ${dashboard.application.result.qualified ? "Qualified" : "Not Qualified"}.` : phase.access.result ? "Result phase is active, but no score card generated yet." : `Result locked during ${phase.activePhase?.name}.`}</p><div className="flex flex-wrap gap-2"><Button disabled={(!phase.access.result && !phase.access.archiveDownloads) || !dashboard?.application?.result} onClick={() => { setResultVisible(true); setTimelineIndex(6); setNotice("Result opened from Neon database."); }}>View Result</Button>{resultVisible && dashboard?.application?.result && <Button className="bg-secondary" onClick={() => downloadFile("score-card.txt", `Score Card\nMarks: ${dashboard.application?.result?.marks}\nRank: ${dashboard.application?.result?.rank}\nQualified: ${dashboard.application?.result?.qualified ? "Yes" : "No"}`)}>Download</Button>}</div></Card>
         </div>

@@ -1,7 +1,7 @@
 import { Copy, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, Input, Select, Table } from "../components/ui";
-import { exams, phases } from "../data/demo";
+import { phases } from "../data/demo";
 import { api } from "../lib/api";
 import { usePersistentState } from "../lib/usePersistentState";
 
@@ -53,7 +53,7 @@ function mapApiExam(exam: ApiExam): ExamRow {
 }
 
 export function Examinations() {
-  const [rows, setRows] = usePersistentState<ExamRow[]>("examPortal.examinations.rows", exams);
+  const [rows, setRows] = usePersistentState<ExamRow[]>("examPortal.examinations.v2.rows", []);
   const [search, setSearch] = usePersistentState("examPortal.examinations.search", "");
   const [department, setDepartment] = usePersistentState("examPortal.examinations.department", "");
   const [status, setStatus] = usePersistentState("examPortal.examinations.status", "");
@@ -71,14 +71,17 @@ export function Examinations() {
     api<ApiExam[]>("/examinations")
       .then((data) => {
         const mapped = data.map(mapApiExam);
-        if (mapped.length) {
-          setRows(mapped);
-          setSelectedCode(mapped[0].code);
-          setSelectedExamId(mapped[0].id);
-          setNotice("Loaded live examinations and workflow phases from the database.");
-        }
+        setRows(mapped);
+        setSelectedCode(mapped[0]?.code ?? "");
+        setSelectedExamId(mapped[0]?.id);
+        setNotice(mapped.length ? "Loaded live examinations and workflow phases from the database." : "No examinations exist yet. Create the first examination from Admin.");
       })
-      .catch(() => setNotice("Using demo examinations because the API is not reachable."));
+      .catch(() => {
+        setRows([]);
+        setSelectedCode("");
+        setSelectedExamId(undefined);
+        setNotice("Could not reach the examination API. No examinations are shown.");
+      });
   }, [hasLocalChanges, setNotice, setRows, setSelectedCode, setSelectedExamId]);
 
   const filteredRows = useMemo(() => rows.filter((exam) => {
@@ -215,8 +218,9 @@ export function Examinations() {
 
   function resetLocalChanges() {
     localStorage.removeItem("examPortal.examinations.rows");
+    localStorage.removeItem("examPortal.examinations.v2.rows");
     localStorage.removeItem("examPortal.examinations.hasLocalChanges");
-    setRows(exams);
+    setRows([]);
     setHasLocalChanges(false);
     setNotice("Local examination changes cleared. Live database data will load again.");
   }
