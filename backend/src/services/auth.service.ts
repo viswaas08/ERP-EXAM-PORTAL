@@ -13,3 +13,26 @@ export async function login(email: string, password: string) {
     refreshToken: signRefreshToken(payload)
   };
 }
+
+export async function resetPassword(email: string, password: string) {
+  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+  if (!user) throw new AppError(404, "No account found for this email");
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash }
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      userEmail: user.email,
+      role: "ACCOUNT",
+      action: "PASSWORD_RESET",
+      affectedRecord: user.id,
+      newValue: JSON.stringify({ email: user.email })
+    }
+  }).catch(() => undefined);
+
+  return { message: "Password reset successfully" };
+}

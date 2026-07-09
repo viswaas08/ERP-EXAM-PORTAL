@@ -3,3 +3,4 @@ import * as controller from "../controllers/auth.controller.js";
 
 export const authRoutes = Router();
 authRoutes.post("/login", controller.login);
+authRoutes.post("/reset-password", controller.resetPassword);
