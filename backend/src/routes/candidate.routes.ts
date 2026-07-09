@@ -174,7 +174,8 @@ candidateRoutes.post("/public-registration", async (req, res) => {
       roleId
     },
     update: {
-      name: String(req.body.name || "Candidate")
+      name: String(req.body.name || "Candidate"),
+      passwordHash
     }
   });
 

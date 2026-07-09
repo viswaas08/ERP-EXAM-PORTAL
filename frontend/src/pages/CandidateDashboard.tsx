@@ -53,14 +53,7 @@ export function CandidateDashboard() {
         setTimelineIndex(index >= 0 ? index : 0);
         setNotice(data.application ? `${data.application.applicationNo} loaded from Neon database.` : "No database application found yet. Submit registration first.");
       })
-      .catch(() => {
-        getCandidatePhase()
-          .then((snapshot) => {
-            setPhase(snapshot);
-            setNotice("Login as candidate to load database dashboard. Showing phase access only.");
-          })
-          .catch(() => setNotice("Workflow service is not reachable. Login again when the backend is available."));
-      });
+      .catch(() => setNotice("Login as a candidate to view saved applications from the database."));
   }, []);
 
   const applications = dashboard?.applications ?? (dashboard?.application ? [dashboard.application] : []);
@@ -121,18 +114,24 @@ export function CandidateDashboard() {
             <Button className="bg-destructive" onClick={handleLogout}><LogOut size={18} /> Logout</Button>
           </div>
         </div>
-        <div className="grid gap-4 md:grid-cols-4">{[
-          selectedApplication ? `Application ${selectedApplication.status}` : "No Application",
-          selectedApplication ? `${selectedApplication.documents.length} Documents Uploaded` : "0 Documents Uploaded",
-          selectedApplication?.hallTicket ? "Hall Ticket Ready" : "Hall Ticket Pending",
-          selectedApplication?.result ? "Result Published" : "Result Pending"
-        ].map((item) => <Card key={item}><p className="font-semibold">{item}</p></Card>)}</div>
-        <Card><h2 className="mb-4 font-semibold">Application Timeline</h2><div className="grid gap-2 md:grid-cols-7">{timeline.map((item, i) => <button className={`rounded-md border border-border p-3 text-left ${i === timelineIndex ? "bg-primary text-white" : ""}`} key={item} onClick={() => { setTimelineIndex(i); setNotice(`${item} timeline stage opened.`); }}><Badge>{i <= timelineIndex ? "Done" : "Pending"}</Badge><p className="mt-2 text-sm font-semibold">{item}</p></button>)}</div></Card>
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card><Ticket className="mb-3 text-primary" /><h2 className="font-semibold">Hall Ticket</h2><p className="my-3 text-sm text-slate-500">{selectedApplication?.hallTicket ? `Roll No ${selectedApplication.hallTicket.rollNumber}, ${selectedApplication.hallTicket.centre.name}.` : phase.access.hallTicket ? "Hall ticket phase is active, but no ticket generated yet." : `Locked during ${phase.activePhase?.name}.`}</p><Button disabled={(!phase.access.hallTicket && !phase.access.archiveDownloads) || !selectedApplication?.hallTicket} onClick={downloadHallTicketPdf}><Download size={18} /> Download PDF</Button></Card>
-          <Card><MonitorPlay className="mb-3 text-secondary" /><h2 className="font-semibold">Online Examination</h2><p className="my-3 text-sm text-slate-500">{phase.access.onlineExam ? "Exam console is enabled for the active phase." : `Exam locked during ${phase.activePhase?.name}.`}</p><div className="flex flex-wrap gap-2"><Button className="bg-secondary" disabled={!phase.access.onlineExam} onClick={() => setNotice("System check passed. Browser, keyboard, and timer are ready.")}>System Check</Button>{phase.access.onlineExam ? <Link to="/exam"><Button>Open Exam Console</Button></Link> : <Button disabled>Open Exam Console</Button>}</div></Card>
-          <Card><FileText className="mb-3 text-amber-600" /><h2 className="font-semibold">Result</h2><p className="my-3 text-sm text-slate-500">{resultVisible && selectedApplication?.result ? `Marks ${selectedApplication.result.marks}, Rank ${selectedApplication.result.rank}, ${selectedApplication.result.qualified ? "Qualified" : "Not Qualified"}.` : phase.access.result ? "Result phase is active, but no score card generated yet." : `Result locked during ${phase.activePhase?.name}.`}</p><div className="flex flex-wrap gap-2"><Button disabled={(!phase.access.result && !phase.access.archiveDownloads) || !selectedApplication?.result} onClick={() => { setResultVisible(true); setTimelineIndex(6); setNotice("Result opened from Neon database."); }}>View Result</Button>{resultVisible && selectedApplication?.result && <Button className="bg-secondary" onClick={() => downloadFile("score-card.txt", `Score Card\nMarks: ${selectedApplication.result?.marks}\nRank: ${selectedApplication.result?.rank}\nQualified: ${selectedApplication.result?.qualified ? "Yes" : "No"}`)}>Download</Button>}</div></Card>
-        </div>
+        {!selectedApplication ? (
+          <Card><h2 className="font-semibold">No Application Found</h2><p className="mt-2 text-sm text-slate-500">Submit a candidate registration to see examination-specific application details here.</p><div className="mt-4"><Link to="/register"><Button>Open Registration</Button></Link></div></Card>
+        ) : (
+          <>
+            <div className="grid gap-4 md:grid-cols-4">{[
+              `Application ${selectedApplication.status}`,
+              `${selectedApplication.documents.length} Documents Uploaded`,
+              selectedApplication.hallTicket ? "Hall Ticket Ready" : "Hall Ticket Pending",
+              selectedApplication.result ? "Result Published" : "Result Pending"
+            ].map((item) => <Card key={item}><p className="font-semibold">{item}</p></Card>)}</div>
+            <Card><h2 className="mb-4 font-semibold">Application Timeline</h2><div className="grid gap-2 md:grid-cols-7">{timeline.map((item, i) => <button className={`rounded-md border border-border p-3 text-left ${i === timelineIndex ? "bg-primary text-white" : ""}`} key={item} onClick={() => { setTimelineIndex(i); setNotice(`${item} timeline stage opened.`); }}><Badge>{i <= timelineIndex ? "Done" : "Pending"}</Badge><p className="mt-2 text-sm font-semibold">{item}</p></button>)}</div></Card>
+            <div className="grid gap-4 md:grid-cols-3">
+              <Card><Ticket className="mb-3 text-primary" /><h2 className="font-semibold">Hall Ticket</h2><p className="my-3 text-sm text-slate-500">{selectedApplication.hallTicket ? `Roll No ${selectedApplication.hallTicket.rollNumber}, ${selectedApplication.hallTicket.centre.name}.` : "No hall ticket has been generated for this application."}</p><Button disabled={!selectedApplication.hallTicket} onClick={downloadHallTicketPdf}><Download size={18} /> Download PDF</Button></Card>
+              <Card><MonitorPlay className="mb-3 text-secondary" /><h2 className="font-semibold">Online Examination</h2><p className="my-3 text-sm text-slate-500">{phase.access.onlineExam ? "Exam console is enabled for this application." : `Exam locked during ${phase.activePhase?.name ?? "the current phase"}.`}</p>{phase.access.onlineExam ? <Link to="/exam"><Button>Open Exam Console</Button></Link> : <Button disabled>Open Exam Console</Button>}</Card>
+              <Card><FileText className="mb-3 text-amber-600" /><h2 className="font-semibold">Result</h2><p className="my-3 text-sm text-slate-500">{resultVisible && selectedApplication.result ? `Marks ${selectedApplication.result.marks}, Rank ${selectedApplication.result.rank}, ${selectedApplication.result.qualified ? "Qualified" : "Not Qualified"}.` : "No result has been published for this application."}</p><div className="flex flex-wrap gap-2"><Button disabled={!selectedApplication.result} onClick={() => { setResultVisible(true); setTimelineIndex(6); setNotice("Result opened from database."); }}>View Result</Button>{resultVisible && selectedApplication.result && <Button className="bg-secondary" onClick={() => downloadFile("score-card.txt", `Score Card\nMarks: ${selectedApplication.result?.marks}\nRank: ${selectedApplication.result?.rank}\nQualified: ${selectedApplication.result?.qualified ? "Yes" : "No"}`)}>Download</Button>}</div></Card>
+            </div>
+          </>
+        )}
       </div>
     </main>
   );
