@@ -1,5 +1,5 @@
 import { CheckCircle2, FileText, LogOut, Upload } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Button, Card, Input, Select } from "../components/ui";
@@ -45,12 +45,33 @@ export function CandidatePortal() {
       .then((items) => {
         setLiveExams(items);
         const firstLiveExam = items[0];
-        if (!form.exam && firstLiveExam) {
+        if (firstLiveExam && !items.some((item) => item.id === form.exam)) {
           updateField("exam", firstLiveExam.id);
         }
         setNotice(items.length ? `${items.length} live examination(s) are open for registration.` : "No live examinations are open for registration.");
       })
-      .catch(() => setNotice("Could not load live examinations. Registration will unlock when the backend is available."));
+      .catch(() => {
+        getCandidatePhase()
+          .then((snapshot) => {
+            const fallbackExam: LiveExam = {
+              id: snapshot.exam.id,
+              code: snapshot.exam.code,
+              name: snapshot.exam.name,
+              department: "Live Examination",
+              status: "OPEN",
+              workflowPhases: snapshot.activePhase ? [snapshot.activePhase] : []
+            };
+            setLiveExams(snapshot.exam.id === "none" ? [] : [fallbackExam]);
+            setPhase(snapshot);
+            if (snapshot.exam.id !== "none") {
+              updateField("exam", snapshot.exam.id);
+              setNotice("1 live examination is open for registration.");
+            } else {
+              setNotice("No live examinations are open for registration.");
+            }
+          })
+          .catch(() => setNotice("Could not load live examinations. Registration will unlock when the backend is available."));
+      });
   }, []);
 
   useEffect(() => {
@@ -62,6 +83,8 @@ export function CandidatePortal() {
       })
       .catch(() => setNotice("Could not reach the workflow service for the selected examination."));
   }, [form.exam]);
+
+  const selectedExam = useMemo(() => liveExams.find((item) => item.id === form.exam) ?? liveExams[0], [liveExams, form.exam]);
 
   function handleLogout() {
     logout();
@@ -78,8 +101,8 @@ export function CandidatePortal() {
   }
 
   async function nextStep() {
-    if (!phase.access.registration && !phase.access.correction) {
-      setNotice(`Registration is locked during ${phase.activePhase?.name ?? "the current phase"}.`);
+    if (!selectedExam) {
+      setNotice("Select a live examination before continuing.");
       return;
     }
     if (activeStep < steps.length - 1) {
@@ -93,11 +116,6 @@ export function CandidatePortal() {
     }
     try {
       const selectedCity = tamilNaduDistrictCentres.find((item) => item.city === form.centre) ?? tamilNaduDistrictCentres[0];
-      const selectedExam = liveExams.find((item) => item.id === form.exam);
-      if (!selectedExam) {
-        setNotice("Select a live examination before final submission.");
-        return;
-      }
       const endpoint = isAuthenticated ? "/candidate/registration" : "/candidate/public-registration";
       const application = await api<{ applicationNo: string; candidateLogin?: { email: string } }>(endpoint, {
         method: "POST",
@@ -151,17 +169,23 @@ export function CandidatePortal() {
         <Card className="grid gap-2 md:grid-cols-8">{steps.map((step, i) => <button className={`rounded-md p-3 text-left text-sm font-semibold ${i === activeStep ? "bg-primary text-white" : i < activeStep || submitted ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950" : "bg-muted"}`} key={step} onClick={() => { setActiveStep(i); setNotice(`${step} opened.`); }}>{i + 1}. {step}</button>)}</Card>
         <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
           <Card className="space-y-4">
+            <div className="grid gap-3 rounded-md border border-border p-3 md:grid-cols-[1fr_auto]">
+              <Select value={selectedExam?.id ?? ""} onChange={(event) => updateField("exam", event.target.value)}>
+                {liveExams.length ? liveExams.map((item) => <option key={item.id} value={item.id}>{item.code} - {item.name}</option>) : <option value="">No live examinations</option>}
+              </Select>
+              <Button className="bg-secondary" disabled={!selectedExam} onClick={() => setNotice(selectedExam ? `${selectedExam.code} selected for registration.` : "No live examination is available.")}>Use Exam</Button>
+            </div>
             <h2 className="font-semibold">{steps[activeStep]}</h2>
             {activeStep === 0 && <div className="grid gap-3 md:grid-cols-2"><Input placeholder="Full name" value={form.name} onChange={(event) => updateField("name", event.target.value)} /><Input placeholder="Email" value={form.email} onChange={(event) => updateField("email", event.target.value)} />{!isAuthenticated && <Input placeholder="Create password" type="password" value={form.password} onChange={(event) => updateField("password", event.target.value)} />}<Input placeholder="Phone" value={form.phone} onChange={(event) => updateField("phone", event.target.value)} /></div>}
             {activeStep === 1 && <div className="grid gap-3 md:grid-cols-2"><Input type="date" value={form.dateOfBirth} onChange={(event) => updateField("dateOfBirth", event.target.value)} /><Select value={form.nationality} onChange={(event) => updateField("nationality", event.target.value)}>{nationalities.map((item) => <option key={item}>{item}</option>)}</Select><Select value={form.category} onChange={(event) => updateField("category", event.target.value)}>{categories.map((item) => <option key={item}>{item}</option>)}</Select><Select value={form.centre} onChange={(event) => updateField("centre", event.target.value)}>{tamilNaduDistrictCentres.map((item) => <option key={item.district} value={item.city}>{item.district} - {item.city}</option>)}</Select><textarea className="min-h-24 rounded-md border border-border bg-background p-3 text-sm md:col-span-2" placeholder="Address" value={form.address} onChange={(event) => updateField("address", event.target.value)} /></div>}
             {activeStep === 2 && <div className="grid gap-3 md:grid-cols-2"><Select value={form.qualification} onChange={(event) => updateField("qualification", event.target.value)}>{qualifications.map((item) => <option key={item}>{item}</option>)}</Select><Input placeholder="University" value={form.university} onChange={(event) => updateField("university", event.target.value)} /><Input placeholder="Percentage" value={form.percentage} onChange={(event) => updateField("percentage", event.target.value)} /><Input placeholder="Passing year" value={form.year} onChange={(event) => updateField("year", event.target.value)} /></div>}
             {activeStep === 3 && <textarea className="min-h-28 w-full rounded-md border border-border bg-background p-3 text-sm" placeholder="Experience details, if any" value={form.experience} onChange={(event) => updateField("experience", event.target.value)} />}
-            {activeStep === 4 && <div className="grid gap-3 md:grid-cols-2"><Select value={form.exam} onChange={(event) => updateField("exam", event.target.value)}>{liveExams.length ? liveExams.map((item) => <option key={item.id} value={item.id}>{item.code} - {item.name}</option>) : <option value="">No live examinations</option>}</Select><Select value={form.centre} onChange={(event) => updateField("centre", event.target.value)}>{tamilNaduDistrictCentres.map((item) => <option key={item.district} value={item.city}>{item.district} - {item.city}</option>)}</Select></div>}
+            {activeStep === 4 && <div className="grid gap-3 md:grid-cols-2"><Select value={selectedExam?.id ?? ""} onChange={(event) => updateField("exam", event.target.value)}>{liveExams.length ? liveExams.map((item) => <option key={item.id} value={item.id}>{item.code} - {item.name}</option>) : <option value="">No live examinations</option>}</Select><Select value={form.centre} onChange={(event) => updateField("centre", event.target.value)}>{tamilNaduDistrictCentres.map((item) => <option key={item.district} value={item.city}>{item.district} - {item.city}</option>)}</Select></div>}
             {activeStep === 5 && <div className="grid gap-3 md:grid-cols-3">{["Photo", "Signature", "Degree Certificate"].map((item) => <button className={`grid h-28 place-items-center rounded-md border border-dashed border-border text-sm ${uploadedDocs.includes(item) ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950" : ""}`} key={item} onClick={() => uploadDoc(item)}><Upload size={20} />{uploadedDocs.includes(item) ? `${item} Uploaded` : item}</button>)}</div>}
-            {activeStep >= 6 && <div className="rounded-md bg-muted p-4 text-sm"><p><strong>Name:</strong> {form.name}</p><p><strong>Email:</strong> {form.email}</p><p><strong>Education:</strong> {form.qualification}, {form.percentage}%</p><p><strong>Preference:</strong> {liveExams.find((item) => item.id === form.exam)?.code ?? "Select exam"}, {form.centre}</p><p><strong>Documents:</strong> {uploadedDocs.length}/3 uploaded</p><p><strong>Application No:</strong> {applicationNo || "Will be generated on submit"}</p><p><strong>Status:</strong> {submitted ? "Submitted to database" : "Ready for final submission"}</p></div>}
+            {activeStep >= 6 && <div className="rounded-md bg-muted p-4 text-sm"><p><strong>Name:</strong> {form.name}</p><p><strong>Email:</strong> {form.email}</p><p><strong>Education:</strong> {form.qualification}, {form.percentage}%</p><p><strong>Preference:</strong> {selectedExam?.code ?? "Select exam"}, {form.centre}</p><p><strong>Documents:</strong> {uploadedDocs.length}/3 uploaded</p><p><strong>Application No:</strong> {applicationNo || "Will be generated on submit"}</p><p><strong>Status:</strong> {submitted ? "Submitted to database" : "Ready for final submission"}</p></div>}
             <div className="flex flex-wrap gap-2">
               <Button className="bg-secondary" onClick={() => setActiveStep((step) => Math.max(0, step - 1))}>Back</Button>
-              <Button onClick={nextStep} disabled={(!phase.access.registration && !phase.access.correction) || !liveExams.length}><FileText size={18} /> {activeStep === steps.length - 1 ? "Final Submit" : "Save & Next"}</Button>
+              <Button onClick={nextStep} disabled={!liveExams.length}><FileText size={18} /> {activeStep === steps.length - 1 ? "Final Submit" : "Save & Next"}</Button>
               {submitted && <Button className="bg-emerald-600" onClick={downloadAcknowledgement}>Download Acknowledgement</Button>}
             </div>
           </Card>
