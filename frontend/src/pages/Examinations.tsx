@@ -45,8 +45,14 @@ export function Examinations() {
   const [notice, setNotice] = usePersistentState("examPortal.examinations.notice", "Ready to manage examinations.");
   const [selectedCode, setSelectedCode] = usePersistentState("examPortal.examinations.selectedCode", rows[0]?.code ?? "");
   const [selectedExamId, setSelectedExamId] = usePersistentState<string | undefined>("examPortal.examinations.selectedExamId", undefined);
+  const [hasLocalChanges, setHasLocalChanges] = usePersistentState("examPortal.examinations.hasLocalChanges", false);
 
   useEffect(() => {
+    if (hasLocalChanges) {
+      setNotice("Showing your saved local examination changes.");
+      return;
+    }
+
     api<ApiExam[]>("/examinations")
       .then((data) => {
         const mapped = data.map((exam) => {
@@ -71,7 +77,7 @@ export function Examinations() {
         }
       })
       .catch(() => setNotice("Using demo examinations because the API is not reachable."));
-  }, []);
+  }, [hasLocalChanges, setNotice, setRows, setSelectedCode, setSelectedExamId]);
 
   const filteredRows = useMemo(() => rows.filter((exam) => {
     const textMatch = `${exam.code} ${exam.name}`.toLowerCase().includes(search.toLowerCase());
@@ -91,6 +97,7 @@ export function Examinations() {
       status: "Draft"
     };
     setRows((current) => [next, ...current]);
+    setHasLocalChanges(true);
     setSelectedCode(next.code);
     setNotice(`${next.code} created as a draft examination.`);
   }
@@ -107,11 +114,13 @@ export function Examinations() {
       phase: phase.name,
       workflowPhases: exam.workflowPhases?.map((item) => ({ ...item, status: item.id === phase.id ? "OPEN" : "SCHEDULED" }))
     } : exam));
+    setHasLocalChanges(true);
     setNotice(`${phase.name} activated and saved to the database. Candidate pages now use this phase.`);
   }
 
   function editExam(code: string) {
     setRows((current) => current.map((exam) => exam.code === code ? { ...exam, phase: "Correction Window", status: "Updated" } : exam));
+    setHasLocalChanges(true);
     setSelectedCode(code);
     setNotice(`${code} moved to Correction Window and marked Updated.`);
   }
@@ -121,13 +130,23 @@ export function Examinations() {
     if (!source) return;
     const clone = { ...source, code: `${source.code}-CLONE`, name: `${source.name} Copy`, status: "Draft", applications: 0 };
     setRows((current) => [clone, ...current]);
+    setHasLocalChanges(true);
     setSelectedCode(clone.code);
     setNotice(`${source.code} cloned into ${clone.code}.`);
   }
 
   function deleteExam(code: string) {
     setRows((current) => current.filter((exam) => exam.code !== code));
+    setHasLocalChanges(true);
     setNotice(`${code} archived from the active list.`);
+  }
+
+  function resetLocalChanges() {
+    localStorage.removeItem("examPortal.examinations.rows");
+    localStorage.removeItem("examPortal.examinations.hasLocalChanges");
+    setRows(exams);
+    setHasLocalChanges(false);
+    setNotice("Local examination changes cleared. Live database data will load again.");
   }
 
   return (
@@ -135,7 +154,10 @@ export function Examinations() {
       <Card className="border-l-4 border-l-primary py-3 text-sm font-medium">{notice}</Card>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h1 className="text-2xl font-bold">Examination Management</h1><p className="text-sm text-slate-500">Create, edit, clone, archive, and phase-control examinations.</p></div>
-        <Button onClick={createExam}><Plus size={18} /> New Exam</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={createExam}><Plus size={18} /> New Exam</Button>
+          <Button className="bg-slate-700" onClick={resetLocalChanges}>Reset Local Changes</Button>
+        </div>
       </div>
       <Card className="grid gap-3 md:grid-cols-4">
         <Input placeholder="Exam name or code" value={search} onChange={(event) => setSearch(event.target.value)} />
