@@ -1,0 +1,15 @@
+import type { Request, Response } from "express";
+import { examSchema } from "../validators/exam.validator.js";
+import * as examService from "../services/exam.service.js";
+
+export async function list(req: Request, res: Response) {
+  res.json(await examService.listExams(req.query as any));
+}
+
+export async function create(req: Request, res: Response) {
+  res.status(201).json(await examService.createExam(examSchema.parse(req.body)));
+}
+
+export async function clone(req: Request, res: Response) {
+  res.status(201).json(await examService.cloneExam(String(req.params.id)));
+}

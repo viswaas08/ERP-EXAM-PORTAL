@@ -1,0 +1,546 @@
+CENTRALIZED COMPETITIVE EXAMINATION MANAGEMENT PORTAL
+PROJECT OVERVIEW AND WORKING PRINCIPLE
+
+1. WHAT THIS PROJECT IS
+
+This project is an enterprise-style web application for managing the complete lifecycle of competitive examinations through one centralized portal.
+
+It is designed like a modern government recruitment board, entrance examination authority, public service commission, or university examination authority system.
+
+The main purpose of the system is to allow administrators to create and manage multiple examinations without changing application code. Admin users can configure examinations, workflow phases, registration forms, eligibility rules, candidate applications, documents, hall tickets, question banks, online exams, results, notifications, and audit logs from the portal.
+
+The project is suitable for a major college project, hackathon, final year project, or enterprise software demonstration.
+
+
+2. TECHNOLOGY USED
+
+Frontend:
+- React 19
+- Vite
+- TypeScript
+- Tailwind CSS
+- React Router
+- React Hook Form-ready structure
+- Zod-ready validation approach
+- TanStack Query-ready API layer
+- Recharts for dashboards and analytics
+- Lucide React icons
+
+Backend:
+- Node.js
+- Express.js
+- TypeScript
+- Prisma ORM
+- JWT authentication
+- bcrypt password hashing
+- Role-Based Access Control
+- PDF generation support
+- Audit logging support
+
+Database:
+- PostgreSQL
+- Prisma schema designed for Neon PostgreSQL free tier
+
+Storage:
+- Cloudinary-ready structure for photos, signatures, certificates, hall tickets, and score cards
+
+Deployment Targets:
+- Frontend: Vercel
+- Backend: Render
+- Database: Neon PostgreSQL
+- File Storage: Cloudinary
+
+
+3. MAIN PROJECT FOLDERS
+
+The project is organized as a monorepo.
+
+frontend/
+Contains the React web application.
+
+Important frontend parts:
+- Admin dashboard
+- Examination management pages
+- Dynamic form builder UI
+- Eligibility rule builder UI
+- Application management UI
+- Document verification UI
+- Centre management UI
+- Hall ticket management UI
+- Question bank UI
+- Result management UI
+- Audit log UI
+- Settings UI
+- Candidate registration portal
+- Candidate dashboard
+- Online examination screen
+
+backend/
+Contains the Express API server.
+
+Important backend parts:
+- Routes
+- Controllers
+- Services
+- Middleware
+- Validators
+- Prisma configuration
+- PDF generation service
+- Authentication service
+- Audit logging middleware
+- Database schema
+- Seed script
+- API documentation
+
+backend/prisma/schema.prisma
+Contains the complete database design.
+
+backend/prisma/seed.ts
+Creates realistic demo data for testing and presentation.
+
+backend/docs/API.md
+Contains API documentation.
+
+README.md
+Contains local setup, demo users, and deployment instructions.
+
+docker-compose.yml
+Provides local PostgreSQL support using Docker.
+
+
+4. USER TYPES
+
+The system supports these user roles:
+
+1. Super Admin
+Can manage the entire system.
+
+2. Examination Controller
+Can manage examinations, phases, centres, and examination operations.
+
+3. Document Verifier
+Can verify uploaded candidate documents.
+
+4. Question Paper Setter
+Can manage subjects, topics, questions, options, marks, and question banks.
+
+5. Result Officer
+Can evaluate, recalculate, hold, and publish results.
+
+6. Read Only Auditor
+Can view system records and audit logs without modifying data.
+
+7. Candidate
+Can register, submit applications, upload documents, download hall tickets, attend exams, and view results.
+
+
+5. MAIN PORTALS
+
+The application contains three main portals:
+
+1. Admin Portal
+Used by administrators and staff to manage the examination system.
+
+2. Candidate Registration Portal
+Used by candidates to apply for examinations through a multi-step form.
+
+3. Candidate Dashboard
+Used by candidates after registration to track application status, documents, hall tickets, exams, and results.
+
+
+6. ADMIN PORTAL MODULES
+
+Admin Dashboard:
+Shows total examinations, candidates, applications, approved applications, pending applications, rejected applications, hall tickets, appeared candidates, registrations, status charts, attendance, and pass percentage.
+
+Examination Management:
+Allows admins to create, edit, clone, archive, and manage examinations.
+
+Workflow Phase Engine:
+Controls exam phases such as registration, correction window, verification, hall ticket release, online examination, and result publication.
+
+Dynamic Registration Form Builder:
+Allows admins to build registration forms without coding. It supports sections, fields, validation rules, required fields, visibility, editability, searchable fields, unique fields, help text, and eligibility fields.
+
+Eligibility Rule Engine:
+Allows admins to define rules such as:
+IF Qualification is Bachelor's Degree AND Percentage is greater than or equal to 60 AND Nationality is Indian THEN approve automatically.
+
+Application Management:
+Allows staff to search, filter, sort, approve, reject, hold, return for correction, export, and review applications.
+
+Document Verification:
+Allows staff to preview, approve, reject, download, zoom, and remark on candidate documents.
+
+Centre Management:
+Allows admins to create centres, define capacity, available systems, labs, city, district, state, GPS location, and allocate candidates.
+
+Hall Ticket Management:
+Generates roll numbers, seat numbers, QR codes, barcodes, centre details, reporting time, and hall ticket PDFs.
+
+Question Bank:
+Manages subjects, topics, difficulty levels, question types, options, correct answers, explanations, marks, negative marks, and tags.
+
+Online Examination:
+Provides a computer-based test interface with timer, question palette, save and next, mark for review, auto-save-ready structure, and submission flow.
+
+Result Management:
+Supports automatic evaluation, manual evaluation-ready design, result publishing, merit list generation, rank list generation, and score card PDF generation.
+
+Analytics:
+Includes dashboards for registrations, attendance, pass percentage, candidate distribution, category distribution, state distribution, and centre utilization.
+
+Audit Logs:
+Records actions performed in the system, including user, role, action, timestamp, affected record, old value, new value, and IP address.
+
+System Settings:
+Manages organization name, portal name, theme, password policy, file upload limits, session timeout, email settings, and backup settings.
+
+Notifications:
+Supports notices, announcements, homepage banners, popup notices, and examination-based notifications.
+
+
+7. CANDIDATE REGISTRATION WORKING
+
+The candidate registration portal uses a multi-step wizard.
+
+Steps:
+1. Personal Details
+2. Address
+3. Education
+4. Experience
+5. Exam Preferences
+6. Document Upload
+7. Preview
+8. Final Submission
+
+Working principle:
+- Candidate selects an examination.
+- The system loads the dynamic form configured by the admin.
+- Candidate fills all required details.
+- Candidate uploads photo, signature, identity proof, certificate, and other required documents.
+- The system validates the form.
+- Candidate previews the application.
+- On final submission, an application number is generated.
+- An acknowledgement PDF can be generated.
+- The application moves into verification or eligibility processing.
+
+
+8. CANDIDATE DASHBOARD WORKING
+
+After submission, the candidate can log in and see:
+
+- Current examination phase
+- Latest notifications
+- Application timeline
+- Application status
+- Uploaded documents
+- Correction window access
+- Hall ticket download
+- Online examination access
+- Result and score card download
+
+The dashboard only shows features that are currently allowed by the active workflow phase.
+
+For example:
+- During registration phase, candidate can submit application.
+- During correction window, candidate can edit allowed fields.
+- During hall ticket release, candidate can download hall ticket.
+- During online examination phase, candidate can start the exam.
+- During result publication, candidate can view result and download score card.
+
+
+9. WORKFLOW PHASE ENGINE WORKING
+
+Every examination has configurable phases.
+
+Example phases:
+- Registration
+- Correction Window
+- Verification
+- Hall Ticket Release
+- Online Examination
+- Result Publication
+
+Each phase has:
+- Open date
+- Close date
+- Status
+- Scheduled state
+- Locked state
+- Extended state
+
+Working principle:
+- Admin configures phases for an examination.
+- The system checks the active phase.
+- Candidate features are enabled or disabled based on the phase.
+- Staff actions are also controlled according to the phase.
+- No candidate should access features outside the allowed phase.
+
+
+10. ELIGIBILITY RULE ENGINE WORKING
+
+The eligibility rule engine allows admin users to define conditions visually.
+
+Example:
+IF Qualification = Bachelor's Degree
+AND Percentage >= 60
+AND Age <= 30
+AND Nationality = Indian
+THEN Approve Automatically
+
+Working principle:
+- Admin creates rules for an examination.
+- Each rule has conditions.
+- Conditions can use AND, OR, NOT, and nested groups.
+- Rules can have priority.
+- The system can simulate rules before applying them.
+- Bulk execution can approve, reject, return, or send applications for manual verification.
+- Rule actions are recorded in audit logs.
+
+
+11. ONLINE EXAMINATION WORKING
+
+The online examination module provides a secure CBT-style exam interface.
+
+Before exam:
+- Candidate sees instructions.
+- Candidate sees countdown.
+- Candidate can perform system check.
+- Start button appears only during the active exam phase.
+
+During exam:
+- Timer runs continuously.
+- Candidate can view questions.
+- Candidate can select answers.
+- Candidate can save and move to next question.
+- Candidate can mark questions for review.
+- Question palette shows attempted, skipped, and marked questions.
+- Answers are auto-save-ready.
+
+After exam:
+- Candidate submits the exam.
+- System stores responses.
+- Evaluation module calculates marks.
+- Result module prepares score, rank, percentile, and qualification status.
+
+
+12. RESULT MANAGEMENT WORKING
+
+Working principle:
+- Candidate responses are evaluated.
+- Correct answers are matched with stored question options.
+- Marks and negative marks are calculated.
+- Percentage, rank, percentile, and qualification status are generated.
+- Result officer can hold or publish results.
+- Candidate can download score card PDF after result publication.
+
+
+13. DATABASE MODELS INCLUDED
+
+The Prisma schema includes models for:
+
+- Users
+- Roles
+- Permissions
+- Candidates
+- CandidateProfiles
+- Applications
+- ApplicationHistory
+- ApplicationDocuments
+- DynamicFormTemplates
+- DynamicFormSections
+- DynamicFormFields
+- DynamicFormResponses
+- EligibilityRules
+- EligibilityConditions
+- Examinations
+- WorkflowPhases
+- ExamCentres
+- HallTickets
+- QuestionBanks
+- Subjects
+- Topics
+- Questions
+- QuestionOptions
+- ExamSessions
+- CandidateResponses
+- Results
+- Notifications
+- AuditLogs
+- SystemSettings
+
+
+14. SEED DATA INCLUDED
+
+The seed script creates realistic demo data:
+
+- Admin users
+- Staff users
+- Candidate users
+- 10 examinations
+- 30 centres
+- 500 candidates
+- 500 applications
+- 2500 documents
+- 6000 questions
+- 500 hall tickets
+- 500 results
+- 100 notifications
+- 30 eligibility rules
+- 5000 audit logs
+
+This makes the dashboard, tables, analytics, and workflow screens look realistic during demo or presentation.
+
+
+15. AUTHENTICATION AND SECURITY
+
+The backend includes:
+
+- JWT authentication
+- Refresh token-ready structure
+- bcrypt password hashing
+- Role-Based Access Control
+- Permission-based route protection
+- Helmet security headers
+- CORS configuration
+- Rate limiting
+- Server-side validation using Zod
+- Prisma ORM protection against SQL injection
+- Environment variable support
+- Audit logging middleware
+
+
+16. PDF GENERATION
+
+The backend includes PDF generation support for:
+
+- Application acknowledgement
+- Hall ticket
+- Score card
+
+The current implementation includes PDF streaming endpoints that can be extended with official layouts, QR codes, barcodes, logos, and signatures.
+
+
+17. API STRUCTURE
+
+The backend follows a clean architecture style:
+
+- Routes define API URLs.
+- Controllers receive requests and return responses.
+- Services contain business logic.
+- Validators check request data.
+- Middleware handles authentication, authorization, errors, and audit logs.
+- Prisma handles database access.
+- Utilities handle shared helper logic.
+
+Important API groups:
+
+- /api/auth
+- /api/dashboard
+- /api/examinations
+- /api/applications
+- /api/eligibility-rules
+- /api/notifications
+- /api/audit-logs
+- /api/hall-tickets
+- /api/results
+
+
+18. HOW THE SYSTEM WORKS END TO END
+
+1. Super Admin logs in.
+2. Admin creates an examination.
+3. Admin configures workflow phases.
+4. Admin builds the registration form.
+5. Admin defines eligibility rules.
+6. Admin configures centres and available systems.
+7. Candidate registers for the examination.
+8. Candidate submits application and documents.
+9. Eligibility rules are simulated or executed.
+10. Document verifier checks documents.
+11. Applications are approved, rejected, held, or returned.
+12. Hall tickets are generated for approved candidates.
+13. Candidate downloads hall ticket.
+14. Candidate appears for online examination.
+15. System stores candidate responses.
+16. Result officer evaluates and publishes results.
+17. Candidate views result and downloads score card.
+18. Every important action is stored in audit logs.
+
+
+19. CURRENT PROJECT STATUS
+
+The project currently includes:
+
+- Complete frontend structure
+- Complete backend structure
+- Working admin dashboard UI
+- Candidate registration UI
+- Candidate dashboard UI
+- Online exam UI
+- Express API server
+- Prisma database schema
+- Seed script
+- PDF endpoint structure
+- API documentation
+- Docker Compose for PostgreSQL
+- README with setup steps
+- Successful frontend and backend builds
+
+The frontend is currently designed as a realistic working demo interface.
+The backend and database are structured for real integration after running PostgreSQL migration and seed commands.
+
+
+20. HOW TO RUN LOCALLY
+
+Install dependencies:
+npm install
+
+Start PostgreSQL using Docker:
+docker compose up -d
+
+Copy environment file:
+copy backend\.env.example backend\.env
+
+Generate Prisma client:
+npm run prisma:generate
+
+Run database migration:
+npm run prisma:migrate
+
+Seed database:
+npm run seed
+
+Start frontend and backend:
+npm run dev
+
+Frontend URL:
+http://localhost:5173
+
+Backend API:
+http://localhost:8080/api
+
+
+21. DEMO LOGIN USERS
+
+Super Admin:
+Email: admin@exam.gov
+Password: Password@123
+
+Examination Controller:
+Email: controller@exam.gov
+Password: Password@123
+
+Candidate:
+Email: candidate@exam.gov
+Password: Password@123
+
+
+22. CONCLUSION
+
+This project demonstrates a complete enterprise examination management system.
+
+It includes admin configuration, candidate registration, workflow management, eligibility checking, document verification, centre allocation, hall ticket generation, online examination, result processing, analytics, audit logs, and system settings.
+
+The system is modular, scalable, and designed using clean architecture principles so that more features can be added easily in the future.

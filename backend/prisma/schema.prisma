@@ -1,0 +1,342 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  passwordHash String
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id])
+  candidate    Candidate?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Role {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  users       User[]
+  permissions Permission[]
+}
+
+model Permission {
+  id     String @id @default(cuid())
+  code   String @unique
+  label  String
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id])
+}
+
+model Candidate {
+  id           String            @id @default(cuid())
+  userId       String            @unique
+  user         User              @relation(fields: [userId], references: [id])
+  profile      CandidateProfile?
+  applications Application[]
+}
+
+model CandidateProfile {
+  id            String    @id @default(cuid())
+  candidateId   String    @unique
+  candidate     Candidate @relation(fields: [candidateId], references: [id])
+  phone         String
+  dateOfBirth   DateTime
+  nationality   String
+  category      String
+  qualification String
+  percentage    Float
+  state         String
+  district      String
+  address       String
+}
+
+model Examination {
+  id              String                @id @default(cuid())
+  name            String
+  code            String                @unique
+  description     String?
+  department      String
+  durationMinutes Int
+  maximumMarks    Float
+  passingMarks    Float
+  negativeMarking Boolean               @default(false)
+  languages       String[]
+  maximumAttempts Int                   @default(1)
+  status          String                @default("DRAFT")
+  createdAt       DateTime              @default(now())
+  applications    Application[]
+  workflowPhases  WorkflowPhase[]
+  formTemplates   DynamicFormTemplate[]
+  eligibility     EligibilityRule[]
+  centres         ExamCentre[]
+  questionBanks   QuestionBank[]
+  hallTickets     HallTicket[]
+  sessions        ExamSession[]
+  results         Result[]
+  notifications   Notification[]
+}
+
+model WorkflowPhase {
+  id            String      @id @default(cuid())
+  examId        String
+  examination   Examination @relation(fields: [examId], references: [id])
+  name          String
+  status        String      @default("SCHEDULED")
+  opensAt       DateTime
+  closesAt      DateTime
+}
+
+model Application {
+  id            String                 @id @default(cuid())
+  applicationNo String                 @unique
+  candidateId   String
+  candidate     Candidate              @relation(fields: [candidateId], references: [id])
+  examinationId String
+  examination   Examination            @relation(fields: [examinationId], references: [id])
+  status        String                 @default("PENDING")
+  submittedAt   DateTime               @default(now())
+  history       ApplicationHistory[]
+  documents     ApplicationDocument[]
+  responses     DynamicFormResponse[]
+  hallTicket    HallTicket?
+  result        Result?
+}
+
+model ApplicationHistory {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id])
+  status        String
+  remarks       String
+  createdAt     DateTime    @default(now())
+}
+
+model ApplicationDocument {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id])
+  type          String
+  url           String
+  status        String      @default("PENDING")
+  remarks       String?
+}
+
+model DynamicFormTemplate {
+  id        String               @id @default(cuid())
+  examId    String
+  exam      Examination          @relation(fields: [examId], references: [id])
+  name      String
+  sections  DynamicFormSection[]
+  createdAt DateTime             @default(now())
+}
+
+model DynamicFormSection {
+  id         String             @id @default(cuid())
+  templateId String
+  template   DynamicFormTemplate @relation(fields: [templateId], references: [id])
+  title      String
+  order      Int
+  fields     DynamicFormField[]
+}
+
+model DynamicFormField {
+  id                 String                @id @default(cuid())
+  sectionId          String
+  section            DynamicFormSection    @relation(fields: [sectionId], references: [id])
+  label              String
+  fieldType          String
+  required           Boolean               @default(false)
+  visible            Boolean               @default(true)
+  editable           Boolean               @default(true)
+  searchable         Boolean               @default(false)
+  eligibilityField   Boolean               @default(false)
+  unique             Boolean               @default(false)
+  validationRules    Json?
+  displayOrder       Int
+  responses          DynamicFormResponse[]
+}
+
+model DynamicFormResponse {
+  id            String           @id @default(cuid())
+  applicationId String
+  application   Application      @relation(fields: [applicationId], references: [id])
+  fieldId       String
+  field         DynamicFormField @relation(fields: [fieldId], references: [id])
+  value         Json
+}
+
+model EligibilityRule {
+  id         String                 @id @default(cuid())
+  examId     String
+  exam       Examination            @relation(fields: [examId], references: [id])
+  name       String
+  priority   Int
+  action     String
+  conditions EligibilityCondition[]
+  active     Boolean                @default(true)
+}
+
+model EligibilityCondition {
+  id        String          @id @default(cuid())
+  ruleId    String
+  rule      EligibilityRule @relation(fields: [ruleId], references: [id])
+  field     String
+  operator  String
+  value     String
+  connector String          @default("AND")
+  groupPath String          @default("root")
+}
+
+model ExamCentre {
+  id               String       @id @default(cuid())
+  examId           String
+  exam             Examination  @relation(fields: [examId], references: [id])
+  name             String
+  city             String
+  district         String
+  state            String
+  capacity         Int
+  availableSystems Int
+  gpsLatitude      Float?
+  gpsLongitude     Float?
+  hallTickets      HallTicket[]
+}
+
+model HallTicket {
+  id            String      @id @default(cuid())
+  applicationId String      @unique
+  application   Application @relation(fields: [applicationId], references: [id])
+  examId        String
+  exam          Examination @relation(fields: [examId], references: [id])
+  centreId      String
+  centre        ExamCentre  @relation(fields: [centreId], references: [id])
+  rollNumber    String      @unique
+  seatNumber    String
+  qrCode        String
+  barcode       String
+  reportingTime DateTime
+}
+
+model Subject {
+  id       String     @id @default(cuid())
+  name     String
+  topics   Topic[]
+  question Question[]
+}
+
+model Topic {
+  id        String     @id @default(cuid())
+  subjectId String
+  subject   Subject    @relation(fields: [subjectId], references: [id])
+  name      String
+  questions Question[]
+}
+
+model QuestionBank {
+  id        String      @id @default(cuid())
+  examId    String
+  exam      Examination @relation(fields: [examId], references: [id])
+  name      String
+  questions Question[]
+}
+
+model Question {
+  id            String              @id @default(cuid())
+  bankId        String
+  bank          QuestionBank        @relation(fields: [bankId], references: [id])
+  subjectId     String
+  subject       Subject             @relation(fields: [subjectId], references: [id])
+  topicId       String
+  topic         Topic               @relation(fields: [topicId], references: [id])
+  questionType  String
+  prompt        String
+  imageUrl      String?
+  difficulty    String
+  explanation   String
+  marks         Float
+  negativeMarks Float
+  tags          String[]
+  options       QuestionOption[]
+  responses     CandidateResponse[]
+}
+
+model QuestionOption {
+  id         String   @id @default(cuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id])
+  text       String
+  isCorrect  Boolean  @default(false)
+}
+
+model ExamSession {
+  id            String              @id @default(cuid())
+  applicationId String
+  examId        String
+  exam          Examination         @relation(fields: [examId], references: [id])
+  startedAt     DateTime?
+  submittedAt   DateTime?
+  status        String              @default("NOT_STARTED")
+  responses     CandidateResponse[]
+}
+
+model CandidateResponse {
+  id         String      @id @default(cuid())
+  sessionId  String
+  session    ExamSession @relation(fields: [sessionId], references: [id])
+  questionId String
+  question   Question    @relation(fields: [questionId], references: [id])
+  answer     Json?
+  marked     Boolean     @default(false)
+  savedAt    DateTime    @default(now())
+}
+
+model Result {
+  id            String      @id @default(cuid())
+  applicationId String      @unique
+  application   Application @relation(fields: [applicationId], references: [id])
+  examId        String
+  exam          Examination @relation(fields: [examId], references: [id])
+  marks         Float
+  percentage    Float
+  rank          Int
+  percentile    Float
+  qualified     Boolean
+  status        String      @default("DRAFT")
+}
+
+model Notification {
+  id        String       @id @default(cuid())
+  examId    String?
+  exam      Examination? @relation(fields: [examId], references: [id])
+  title     String
+  body      String
+  type      String
+  visible   Boolean      @default(true)
+  publishAt DateTime
+  createdAt DateTime     @default(now())
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  userEmail      String
+  role           String
+  action         String
+  affectedRecord String
+  oldValue       String?
+  newValue       String?
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+}
+
+model SystemSetting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value Json
+}
