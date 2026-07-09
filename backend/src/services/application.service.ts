@@ -18,11 +18,13 @@ export function listApplications(query: { status?: string; search?: string; exam
 }
 
 export function updateApplicationStatus(id: string, status: string, remarks?: string) {
+  const nextStatus = status.toUpperCase();
   return prisma.application.update({
     where: { id },
     data: {
-      status,
-      history: { create: { status, remarks: remarks ?? "" } }
-    }
+      status: nextStatus,
+      history: { create: { status: nextStatus, remarks: remarks ?? "" } }
+    },
+    include: { candidate: { include: { user: true, profile: true } }, examination: true, documents: true, history: { orderBy: { createdAt: "asc" } } }
   });
 }

@@ -22,23 +22,24 @@ export function Applications() {
   const [selectedId, setSelectedId] = useState("");
   const [notice, setNotice] = useState("Applications load from the database.");
 
-  function loadApplications() {
+  async function loadApplications(preferredSelectedId = selectedId) {
     const queryString = selectedExamId ? `?examId=${encodeURIComponent(selectedExamId)}` : "";
-    api<ApplicationRow[]>(`/applications${queryString}`)
-      .then((data) => {
-        setRows(data);
-        setSelectedId(data[0]?.id ?? "");
-        setNotice(`${data.length} database application(s) loaded${selectedExamId ? " for the selected examination" : ""}.`);
-      })
-      .catch((error) => setNotice(error instanceof Error ? error.message : "Could not load applications."));
+    try {
+      const data = await api<ApplicationRow[]>(`/applications${queryString}`);
+      setRows(data);
+      setSelectedId(data.some((app) => app.id === preferredSelectedId) ? preferredSelectedId : data[0]?.id ?? "");
+      setNotice(`${data.length} database application(s) loaded${selectedExamId ? " for the selected examination" : ""}.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not load applications.");
+    }
   }
 
   useEffect(() => {
-    loadApplications();
+    void loadApplications();
   }, []);
 
   useEffect(() => {
-    loadApplications();
+    void loadApplications();
   }, [selectedExamId]);
 
   const filteredRows = useMemo(() => rows.filter((app) => {
@@ -63,13 +64,19 @@ export function Applications() {
   }
 
   async function updateStatus(id: string, nextStatus: string) {
-    const updated = await api<{ id: string; status: string }>(`/applications/${id}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: nextStatus, remarks: `Marked ${nextStatus} from admin portal` })
-    });
-    setRows((current) => current.map((app) => app.id === id ? { ...app, status: updated.status } : app));
-    setSelectedId(id);
-    setNotice(`Application status updated to ${nextStatus}.`);
+    try {
+      const updated = await api<ApplicationRow>(`/applications/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: nextStatus, remarks: `Marked ${nextStatus} from admin portal` })
+      });
+      setRows((current) => current.map((app) => app.id === id ? updated : app));
+      setSelectedId(id);
+      setStatus("All Statuses");
+      setNotice(`${updated.applicationNo} updated to ${updated.status} in the database.`);
+      await loadApplications(id);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Application status could not be updated.");
+    }
   }
 
   return (

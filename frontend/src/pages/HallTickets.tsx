@@ -1,9 +1,8 @@
 import { FileDown, QrCode, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
-import { applications } from "../data/demo";
 import { Badge, Button, Card, Table } from "../components/ui";
 import { usePersistentState } from "../lib/usePersistentState";
-import { api } from "../lib/api";
+import { API_URL, api } from "../lib/api";
 
 type DbApplication = {
   id: string;
@@ -13,48 +12,66 @@ type DbApplication = {
   examination: { code: string; name: string };
 };
 
+type HallTicketRow = {
+  id: string;
+  rollNumber: string;
+  seatNumber: string;
+  reportingTime: string;
+  application: DbApplication;
+  centre: { name: string; city: string; state: string };
+};
+
 export function HallTickets() {
-  const [generated, setGenerated] = usePersistentState("examPortal.hallTickets.generated", 0);
   const [notice, setNotice] = usePersistentState("examPortal.hallTickets.notice", "Hall ticket batch is ready.");
   const [regenerated, setRegenerated] = usePersistentState<string[]>("examPortal.hallTickets.regenerated", []);
   const [dbRows, setDbRows] = useState<DbApplication[]>([]);
+  const [tickets, setTickets] = useState<HallTicketRow[]>([]);
 
-  useEffect(() => {
-    api<DbApplication[]>("/applications")
-      .then((data) => {
-        if (data && data.length > 0) {
-          setDbRows(data);
-          setNotice(`Loaded ${data.length} candidate application(s) from database.`);
-        }
-      })
-      .catch(() => {
-        setNotice("Loaded local candidate applications (demo mode).");
-      });
-  }, []);
-
-  const displayRows = dbRows.length > 0
-    ? dbRows.map((app) => ({
-        id: app.applicationNo,
-        name: app.candidate.user.name,
-        exam: app.examination.code,
-        status: app.status
-      }))
-    : applications;
-
-  function bulkGenerate() {
-    setGenerated((value) => value + displayRows.length);
-    setNotice(`${displayRows.length} pending hall tickets generated with QR and barcode values.`);
+  async function loadHallTicketData() {
+    try {
+      const [applications, hallTickets] = await Promise.all([
+        api<DbApplication[]>("/applications"),
+        api<HallTicketRow[]>("/hall-tickets")
+      ]);
+      setDbRows(applications);
+      setTickets(hallTickets);
+      setNotice(`${hallTickets.length} hall ticket(s) loaded from database.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not load hall ticket data.");
+    }
   }
 
-  function downloadTicket(id: string) {
-    const content = `Hall Ticket\nApplication: ${id}\nReporting Time: 08:30 AM\nCentre: Assigned CBT Centre`;
-    const url = URL.createObjectURL(new Blob([content], { type: "text/plain" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${id}-hall-ticket.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
-    setNotice(`${id} hall ticket downloaded.`);
+  useEffect(() => {
+    void loadHallTicketData();
+  }, []);
+
+  async function bulkGenerate() {
+    try {
+      const result = await api<{ generated: number; message?: string }>("/hall-tickets/generate", { method: "POST", body: JSON.stringify({}) });
+      setNotice(result.message ?? `${result.generated} hall ticket(s) generated in the database.`);
+      await loadHallTicketData();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Hall ticket generation failed.");
+    }
+  }
+
+  async function downloadTicket(ticket: HallTicketRow) {
+    try {
+      const token = localStorage.getItem("accessToken");
+      const response = await fetch(`${API_URL}/api/hall-tickets/${ticket.id}.pdf`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (!response.ok) throw new Error("Hall ticket PDF download failed");
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${ticket.application.applicationNo}-hall-ticket.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setNotice(`${ticket.application.applicationNo} hall ticket downloaded.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Hall ticket download failed.");
+    }
   }
 
   return (
@@ -65,7 +82,7 @@ export function HallTickets() {
         <Button onClick={bulkGenerate}><QrCode size={18} /> Bulk Generate</Button>
       </div>
       <Card className="grid gap-3 md:grid-cols-4">
-        {[`${generated} Generated`, `${Math.max(0, displayRows.length - generated)} Pending`, "30 Centres", "100% QR Ready"].map((item) => (
+        {[`${tickets.length} Generated`, `${dbRows.filter((app) => app.status === "APPROVED").length} Approved`, "38 Centres", "PDF Ready"].map((item) => (
           <div className="rounded-md bg-muted p-4 font-semibold" key={item}>{item}</div>
         ))}
       </Card>
@@ -74,25 +91,25 @@ export function HallTickets() {
           <tr>{["Application", "Candidate", "Exam", "Roll No", "Reporting", "Status", "Actions"].map((h) => <th className="p-3" key={h}>{h}</th>)}</tr>
         </thead>
         <tbody>
-          {displayRows.slice(0, 8).map((app, i) => (
-            <tr className="border-t border-border" key={app.id}>
-              <td className="p-3 font-semibold">{app.id}</td>
-              <td className="p-3">{app.name}</td>
-              <td className="p-3">{app.exam}</td>
-              <td className="p-3">26{String(i + 1).padStart(6, "0")}</td>
-              <td className="p-3">08:30 AM</td>
+          {tickets.map((ticket) => (
+            <tr className="border-t border-border" key={ticket.id}>
+              <td className="p-3 font-semibold">{ticket.application.applicationNo}</td>
+              <td className="p-3">{ticket.application.candidate.user.name}</td>
+              <td className="p-3">{ticket.application.examination.code}</td>
+              <td className="p-3">{ticket.rollNumber}</td>
+              <td className="p-3">{new Date(ticket.reportingTime).toLocaleString()}</td>
               <td className="p-3">
-                <Badge>{regenerated.includes(app.id) ? "Regenerated" : "Generated"}</Badge>
+                <Badge>{regenerated.includes(ticket.id) ? "Regenerated" : "Generated"}</Badge>
               </td>
               <td className="p-3">
                 <div className="flex gap-2">
-                  <Button className="h-8 w-8 px-0" onClick={() => downloadTicket(app.id)} title="Download Ticket"><FileDown size={15} /></Button>
-                  <Button className="h-8 w-8 bg-secondary px-0" onClick={() => { setRegenerated((current) => [...new Set([...current, app.id])]); setNotice(`${app.id} regenerated.`); }} title="Regenerate"><RefreshCw size={15} /></Button>
+                  <Button className="h-8 w-8 px-0" onClick={() => downloadTicket(ticket)} title="Download Ticket"><FileDown size={15} /></Button>
+                  <Button className="h-8 w-8 bg-secondary px-0" onClick={() => { setRegenerated((current) => [...new Set([...current, ticket.id])]); setNotice(`${ticket.application.applicationNo} marked for regeneration.`); }} title="Regenerate"><RefreshCw size={15} /></Button>
                 </div>
               </td>
             </tr>
           ))}
-          {!displayRows.length && (
+          {!tickets.length && (
             <tr><td className="p-6 text-center text-slate-500" colSpan={7}>No applications are available for hall ticket generation.</td></tr>
           )}
         </tbody>

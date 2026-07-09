@@ -81,6 +81,23 @@ export function OnlineExam() {
     setNotice(`Question ${currentQuestion.number || currentIndex + 1} review flag toggled.`);
   }
 
+  async function submitExam() {
+    if (!paper || !phase.access.onlineExam) {
+      setNotice(`Submission is locked during ${phase.activePhase?.name ?? "the current phase"}.`);
+      return;
+    }
+    try {
+      const result = await api<{ sessionId: string; answered: number }>("/questions/online/submit", {
+        method: "POST",
+        body: JSON.stringify({ examId: paper.exam.id, answers, marked })
+      });
+      setSubmitted(true);
+      setNotice(`Exam submitted to database. ${result.answered} answer(s) saved.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Exam submission failed.");
+    }
+  }
+
   return (
     <main className="min-h-screen bg-background">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card p-4">
@@ -101,7 +118,7 @@ export function OnlineExam() {
               <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">Question {currentQuestion.number || currentIndex + 1}</h2><span className="text-sm text-slate-500">{currentQuestion.subject} | {currentQuestion.topic} | Marks {currentQuestion.marks}, Negative {currentQuestion.negativeMarks}</span></div>
               <p className="mb-5 text-lg font-semibold">{currentQuestion.prompt}</p>
               <div className="space-y-3">{currentQuestion.options.map((option) => <label className={`flex items-center gap-3 rounded-md border border-border p-4 ${answers[currentQuestion.id] === option.id ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950" : ""}`} key={option.id}><input checked={answers[currentQuestion.id] === option.id} disabled={submitted || !phase.access.onlineExam} name="answer" type="radio" onChange={() => { setAnswers((currentAnswers) => ({ ...currentAnswers, [currentQuestion.id]: option.id })); setNotice(`Answer selected for question ${currentQuestion.number || currentIndex + 1}.`); }} />{option.text}</label>)}</div>
-              <div className="mt-6 flex flex-wrap gap-2"><Button className="bg-secondary" disabled={submitted || !phase.access.onlineExam} onClick={saveAndNext}><Save size={18} /> Save & Next</Button><Button disabled={submitted || !phase.access.onlineExam} onClick={markForReview}><Flag size={18} /> {marked.includes(currentQuestion.id) ? "Unmark Review" : "Mark For Review"}</Button><Button className="bg-destructive" disabled={submitted || !phase.access.onlineExam} onClick={() => { setSubmitted(true); setNotice("Exam submitted."); }}><Send size={18} /> Submit</Button></div>
+              <div className="mt-6 flex flex-wrap gap-2"><Button className="bg-secondary" disabled={submitted || !phase.access.onlineExam} onClick={saveAndNext}><Save size={18} /> Save & Next</Button><Button disabled={submitted || !phase.access.onlineExam} onClick={markForReview}><Flag size={18} /> {marked.includes(currentQuestion.id) ? "Unmark Review" : "Mark For Review"}</Button><Button className="bg-destructive" disabled={submitted || !phase.access.onlineExam} onClick={submitExam}><Send size={18} /> Submit</Button></div>
             </>
           )}
         </Card>

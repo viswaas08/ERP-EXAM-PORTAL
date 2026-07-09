@@ -23,6 +23,13 @@ export type CandidatePhaseSnapshot = {
     result: boolean;
     archiveDownloads: boolean;
   };
+  phases?: Array<{
+    id: string;
+    name: string;
+    status: string;
+    opensAt: string;
+    closesAt: string;
+  }>;
 };
 
 export type LiveExam = {

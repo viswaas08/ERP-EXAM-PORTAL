@@ -1,9 +1,8 @@
 import { FileDown, RefreshCw, Trophy } from "lucide-react";
 import { useEffect, useState } from "react";
-import { applications } from "../data/demo";
 import { Badge, Button, Card, Table } from "../components/ui";
 import { usePersistentState } from "../lib/usePersistentState";
-import { api } from "../lib/api";
+import { API_URL, api } from "../lib/api";
 
 type DbApplication = {
   id: string;
@@ -13,78 +12,76 @@ type DbApplication = {
   examination: { code: string; name: string };
 };
 
+type ResultRow = {
+  id: string;
+  marks: number;
+  percentage: number;
+  rank: number;
+  qualified: boolean;
+  status: string;
+  application: DbApplication;
+};
+
 export function Results() {
-  const [published, setPublished] = usePersistentState("examPortal.results.published", false);
   const [notice, setNotice] = usePersistentState("examPortal.results.notice", "Results are calculated. Ready for publishing.");
   const [dbRows, setDbRows] = useState<DbApplication[]>([]);
-  const [scores, setScores] = usePersistentState<Record<string, number>>("examPortal.results.scores", {});
+  const [results, setResults] = useState<ResultRow[]>([]);
+
+  async function loadResults() {
+    try {
+      const [applications, resultRows] = await Promise.all([
+        api<DbApplication[]>("/applications"),
+        api<ResultRow[]>("/results")
+      ]);
+      setDbRows(applications);
+      setResults(resultRows);
+      setNotice(`${resultRows.length} result(s) loaded from database.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not load result data.");
+    }
+  }
 
   useEffect(() => {
-    api<DbApplication[]>("/applications")
-      .then((data) => {
-        if (data && data.length > 0) {
-          setDbRows(data);
-          setNotice(`Loaded ${data.length} candidate application(s) from database.`);
-        }
-      })
-      .catch(() => {
-        setNotice("Loaded local candidate applications (demo mode).");
-      });
+    void loadResults();
   }, []);
 
-  const displayRows = dbRows.length > 0
-    ? dbRows.map((app) => ({
-        id: app.applicationNo,
-        name: app.candidate.user.name,
-        exam: app.examination.code,
-        status: app.status
-      }))
-    : applications;
-
-  // Initialize scores if not set
-  useEffect(() => {
-    if (displayRows.length > 0) {
-      setScores((current) => {
-        const next = { ...current };
-        let updated = false;
-        displayRows.forEach((app, index) => {
-          if (next[app.id] === undefined) {
-            next[app.id] = index % 2 === 0 ? 82 : 45;
-            updated = true;
-          }
-        });
-        return updated ? next : current;
-      });
+  async function recalculate() {
+    try {
+      const evaluated = await api<{ evaluated: number }>("/results/evaluate", { method: "POST", body: JSON.stringify({}) });
+      setNotice(`${evaluated.evaluated} submitted exam(s) evaluated in the database.`);
+      await loadResults();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Result evaluation failed.");
     }
-  }, [displayRows, setScores]);
+  }
 
-  function recalculate() {
-    setScores((current) => {
-      const next = { ...current };
-      displayRows.forEach((app) => {
-        next[app.id] = Math.floor(Math.random() * 40) + 60;
+  async function publishResults() {
+    try {
+      const published = await api<{ published: number }>("/results/publish", { method: "POST", body: JSON.stringify({}) });
+      setNotice(`${published.published} result(s) published live to candidate portal.`);
+      await loadResults();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Result publication failed.");
+    }
+  }
+
+  async function downloadScorecard(result: ResultRow) {
+    try {
+      const token = localStorage.getItem("accessToken");
+      const response = await fetch(`${API_URL}/api/results/${result.id}/score-card.pdf`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
-      return next;
-    });
-    setNotice("Results recalculated with normalization applied.");
-  }
-
-  function togglePublish() {
-    setPublished((value) => !value);
-    setNotice(published ? "Results unpublished." : "Results published live to candidate portal.");
-  }
-
-  function downloadScorecard(id: string) {
-    const score = scores[id] ?? 0;
-    const pass = score >= 50;
-    const content = `Score Card\nApplication: ${id}\nScore: ${score}\nResult: ${pass ? "PASS" : "FAIL"}`;
-    const url = URL.createObjectURL(new Blob([content], { type: "text/plain" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${id}-scorecard.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
-    setNotice(`${id} scorecard downloaded.`);
+      if (!response.ok) throw new Error("Score card PDF download failed");
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${result.application.applicationNo}-score-card.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setNotice(`${result.application.applicationNo} score card downloaded.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Score card download failed.");
+    }
   }
 
   return (
@@ -93,12 +90,12 @@ export function Results() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h1 className="text-2xl font-bold">Results Processing</h1><p className="text-sm text-slate-500">Calculate normalized scores, compile merit lists, and publish candidate score cards.</p></div>
         <div className="flex gap-2">
-          <Button className="bg-secondary" onClick={recalculate}><RefreshCw size={18} /> Recalculate</Button>
-          <Button onClick={togglePublish} className={published ? "bg-amber-600" : "bg-primary"}><Trophy size={18} /> {published ? "Unpublish Results" : "Publish Results"}</Button>
+          <Button className="bg-secondary" onClick={recalculate}><RefreshCw size={18} /> Evaluate</Button>
+          <Button onClick={publishResults}><Trophy size={18} /> Publish Results</Button>
         </div>
       </div>
       <Card className="grid gap-3 md:grid-cols-4">
-        {["Total Scored: " + displayRows.length, "Passed: " + displayRows.filter((app) => (scores[app.id] ?? 0) >= 50).length, "Failed: " + displayRows.filter((app) => (scores[app.id] ?? 0) < 50).length, "Status: " + (published ? "Published" : "Draft")].map((item) => (
+        {["Applications: " + dbRows.length, "Evaluated: " + results.length, "Passed: " + results.filter((result) => result.qualified).length, "Published: " + results.filter((result) => result.status === "PUBLISHED").length].map((item) => (
           <div className="rounded-md bg-muted p-4 font-semibold" key={item}>{item}</div>
         ))}
       </Card>
@@ -107,27 +104,25 @@ export function Results() {
           <tr>{["Application", "Candidate", "Exam", "Score", "Result", "Actions"].map((h) => <th className="p-3" key={h}>{h}</th>)}</tr>
         </thead>
         <tbody>
-          {displayRows.map((app) => {
-            const score = scores[app.id] ?? 0;
-            const pass = score >= 50;
+          {results.map((result) => {
             return (
-              <tr className="border-t border-border" key={app.id}>
-                <td className="p-3 font-semibold">{app.id}</td>
-                <td className="p-3">{app.name}</td>
-                <td className="p-3">{app.exam}</td>
-                <td className="p-3 font-semibold">{score}</td>
+              <tr className="border-t border-border" key={result.id}>
+                <td className="p-3 font-semibold">{result.application.applicationNo}</td>
+                <td className="p-3">{result.application.candidate.user.name}</td>
+                <td className="p-3">{result.application.examination.code}</td>
+                <td className="p-3 font-semibold">{result.marks}</td>
                 <td className="p-3">
-                  <Badge className={pass ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}>
-                    {pass ? "Pass" : "Fail"}
+                  <Badge className={result.qualified ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}>
+                    {result.qualified ? "Pass" : "Fail"} / {result.status}
                   </Badge>
                 </td>
                 <td className="p-3">
-                  <Button className="h-8 w-8 px-0" onClick={() => downloadScorecard(app.id)} title="Download Scorecard"><FileDown size={15} /></Button>
+                  <Button className="h-8 w-8 px-0" onClick={() => downloadScorecard(result)} title="Download Scorecard"><FileDown size={15} /></Button>
                 </td>
               </tr>
             );
           })}
-          {!displayRows.length && (
+          {!results.length && (
             <tr><td className="p-6 text-center text-slate-500" colSpan={6}>No applications are available for results processing.</td></tr>
           )}
         </tbody>

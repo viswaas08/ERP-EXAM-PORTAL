@@ -5,6 +5,40 @@ import { Button, Card, Input } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
 import { api } from "../lib/api";
 
+function PasswordInput({
+  label,
+  value,
+  onChange,
+  visible,
+  onToggle,
+  helper
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  visible: boolean;
+  onToggle: () => void;
+  helper?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-200">{label}</span>
+      <div className="flex h-11 items-center rounded-md border border-border bg-white focus-within:ring-2 focus-within:ring-primary/25 dark:bg-slate-900">
+        <input
+          className="h-full min-w-0 flex-1 rounded-md bg-transparent px-3 text-sm outline-none"
+          type={visible ? "text" : "password"}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <button className="grid h-10 w-10 shrink-0 place-items-center rounded-md text-slate-500 hover:bg-muted" type="button" onClick={onToggle} title={visible ? "Hide password" : "Show password"}>
+          {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </div>
+      {helper && <span className="mt-1.5 block text-xs text-slate-500">{helper}</span>}
+    </label>
+  );
+}
+
 export function Login() {
   const [email, setEmail] = useState("admin@exam.gov");
   const [password, setPassword] = useState("Password@123");
@@ -94,13 +128,8 @@ export function Login() {
             </div>
             <form className="space-y-3" onSubmit={handleSubmit}>
               <Input placeholder="Email" value={email} onChange={(event) => setEmail(event.target.value)} />
-              <div className="relative">
-                <Input className="pr-11" placeholder={resetMode ? "New password" : "Password"} type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} />
-                <button className="absolute inset-y-0 right-0 grid w-11 place-items-center text-slate-500" type="button" onClick={() => setShowPassword((value) => !value)} title={showPassword ? "Hide password" : "Show password"}>
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-              {resetMode && <Input placeholder="Confirm new password" type={showPassword ? "text" : "password"} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />}
+              <PasswordInput label={resetMode ? "New password" : "Password"} value={password} onChange={setPassword} visible={showPassword} onToggle={() => setShowPassword((value) => !value)} helper={resetMode ? "Use at least 8 characters." : undefined} />
+              {resetMode && <PasswordInput label="Confirm new password" value={confirmPassword} onChange={setConfirmPassword} visible={showPassword} onToggle={() => setShowPassword((value) => !value)} />}
               {error && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
               {notice && <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</div>}
               <Button className="w-full" disabled={loading}>{loading ? (resetMode ? "Resetting..." : "Signing in...") : (resetMode ? "Reset Password" : "Login")} <ArrowRight size={18} /></Button>
