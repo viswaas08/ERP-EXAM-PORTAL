@@ -1,5 +1,7 @@
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import { prisma } from "../config/prisma.js";
+import { env } from "../config/env.js";
 import { AppError } from "../utils/AppError.js";
 import { signAccessToken, signRefreshToken } from "../utils/tokens.js";
 
@@ -35,4 +37,25 @@ export async function resetPassword(email: string, password: string) {
   }).catch(() => undefined);
 
   return { message: "Password reset successfully" };
+}
+
+export async function refreshAccessToken(refreshToken: string) {
+  let payload: { id?: string };
+
+  try {
+    payload = jwt.verify(refreshToken, env.jwtRefreshSecret) as { id?: string };
+  } catch {
+    throw new AppError(401, "Invalid refresh token");
+  }
+
+  if (!payload.id) throw new AppError(401, "Invalid refresh token");
+
+  const user = await prisma.user.findUnique({ where: { id: payload.id }, include: { role: { include: { permissions: true } } } });
+  if (!user) throw new AppError(401, "Invalid refresh token");
+
+  const accessPayload = { id: user.id, role: user.role.name, permissions: user.role.permissions.map((permission) => permission.code) };
+  return {
+    accessToken: signAccessToken(accessPayload),
+    user: { id: user.id, name: user.name, email: user.email, role: user.role.name }
+  };
 }
