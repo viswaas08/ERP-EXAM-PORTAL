@@ -1,4 +1,4 @@
-import { Copy, Pencil, Plus, Trash2 } from "lucide-react";
+import { Copy, Pencil, PlayCircle, Plus, Radio, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, Input, Select, Table } from "../components/ui";
 import { phases } from "../data/demo";
@@ -35,7 +35,15 @@ type ApiExam = {
   _count?: { applications: number };
 };
 const departments = ["", "Administrative Services", "Higher Education", "Public Works", "Health Services", "Police Recruitment", "Technical Education", "University Authority"];
-const statusOptions = ["", "Active", "Open", "Draft", "Archived", "Updated", "Closed"];
+const statusOptions = ["", "Live", "Active", "Open", "Draft", "Archived", "Updated", "Closed"];
+
+function isLiveStatus(status: string) {
+  return ["OPEN", "ACTIVE", "LIVE"].includes(status.toUpperCase());
+}
+
+function statusLabel(status: string) {
+  return isLiveStatus(status) ? "LIVE" : status;
+}
 
 function mapApiExam(exam: ApiExam): ExamRow {
   const activePhase = exam.workflowPhases.find((phase) => phase.status === "OPEN") ?? exam.workflowPhases[0];
@@ -64,11 +72,6 @@ export function Examinations() {
   const [hasLocalChanges, setHasLocalChanges] = usePersistentState("examPortal.examinations.hasLocalChanges", false);
 
   useEffect(() => {
-    if (hasLocalChanges) {
-      setNotice("Showing your saved local examination changes.");
-      return;
-    }
-
     api<ApiExam[]>("/examinations")
       .then((data) => {
         const mapped = data.map(mapApiExam);
@@ -76,22 +79,29 @@ export function Examinations() {
         setSelectedCode(mapped[0]?.code ?? "");
         setSelectedExamId(mapped[0]?.id);
         setAdminSelectedExamCode(mapped[0]?.code ?? "All Exams");
-        setNotice(mapped.length ? "Loaded live examinations and workflow phases from the database." : "No examinations exist yet. Create the first examination from Admin.");
+        setHasLocalChanges(false);
+        setNotice(mapped.length ? "Loaded examinations from the database." : "No examinations exist yet. Create the first examination from Admin.");
       })
       .catch(() => {
+        if (hasLocalChanges && rows.length) {
+          setNotice("Could not reach the examination API. Showing saved local examination changes.");
+          return;
+        }
         setRows([]);
         setSelectedCode("");
         setSelectedExamId(undefined);
         setNotice("Could not reach the examination API. No examinations are shown.");
       });
-  }, [hasLocalChanges, setNotice, setRows, setSelectedCode, setSelectedExamId]);
+  }, []);
 
   const filteredRows = useMemo(() => rows.filter((exam) => {
     const textMatch = `${exam.code} ${exam.name}`.toLowerCase().includes(search.toLowerCase());
     const departmentMatch = exam.department.toLowerCase().includes(department.toLowerCase());
-    const statusMatch = exam.status.toLowerCase().includes(status.toLowerCase());
+    const normalizedStatus = status.toLowerCase();
+    const statusMatch = !normalizedStatus || exam.status.toLowerCase().includes(normalizedStatus) || (normalizedStatus === "live" && isLiveStatus(exam.status));
     return textMatch && departmentMatch && statusMatch;
   }), [rows, search, department, status]);
+  const liveRows = useMemo(() => rows.filter((exam) => isLiveStatus(exam.status)), [rows]);
 
   async function createExam() {
     const next = {
@@ -177,6 +187,33 @@ export function Examinations() {
     setNotice(`${code} moved to Correction Window and marked Updated.`);
   }
 
+  async function makeLive(code: string) {
+    const source = rows.find((exam) => exam.code === code);
+    if (!source?.id) {
+      setRows((current) => current.map((exam) => exam.code === code ? { ...exam, status: "OPEN" } : exam));
+      setSelectedCode(code);
+      setAdminSelectedExamCode(code);
+      setNotice(`${code} marked live locally.`);
+      return;
+    }
+
+    try {
+      const updated = await api<ApiExam>(`/examinations/${source.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "OPEN" })
+      });
+      const mapped = mapApiExam(updated);
+      setRows((current) => current.map((exam) => exam.id === mapped.id ? mapped : exam));
+      setSelectedCode(mapped.code);
+      setSelectedExamId(mapped.id);
+      setAdminSelectedExamCode(mapped.code);
+      setStatus("Live");
+      setNotice(`${mapped.code} is now live and visible to candidates.`);
+    } catch {
+      setNotice("Could not mark the examination live.");
+    }
+  }
+
   async function cloneExam(code: string) {
     const source = rows.find((exam) => exam.code === code);
     if (!source) return;
@@ -231,15 +268,28 @@ export function Examinations() {
     setNotice("Local examination changes cleared. Live database data will load again.");
   }
 
+  function showLiveExams() {
+    setSearch("");
+    setDepartment("");
+    setStatus("Live");
+    setNotice(`${liveRows.length} live examination(s) are visible.`);
+  }
+
   return (
     <section className="space-y-5">
       <Card className="border-l-4 border-l-primary py-3 text-sm font-medium">{notice}</Card>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h1 className="text-2xl font-bold">Examination Management</h1><p className="text-sm text-slate-500">Create, edit, clone, archive, and phase-control examinations.</p></div>
         <div className="flex flex-wrap gap-2">
+          <Button className="bg-emerald-600" onClick={showLiveExams}><Radio size={18} /> Live Exams</Button>
           <Button onClick={createExam}><Plus size={18} /> New Exam</Button>
           <Button className="bg-slate-700" onClick={resetLocalChanges}>Reset Local Changes</Button>
         </div>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <Card className="flex items-center justify-between"><div><p className="text-sm text-slate-500">Live Exams</p><p className="text-2xl font-bold">{liveRows.length}</p></div><Radio className="text-emerald-700" /></Card>
+        <Card className="flex items-center justify-between"><div><p className="text-sm text-slate-500">All Exams</p><p className="text-2xl font-bold">{rows.length}</p></div><PlayCircle className="text-primary" /></Card>
+        <Card className="flex items-center justify-between"><div><p className="text-sm text-slate-500">Selected Exam</p><p className="text-2xl font-bold">{selectedCode || "None"}</p></div><Badge>{status || "All Statuses"}</Badge></Card>
       </div>
       <Card className="grid gap-3 md:grid-cols-4">
         <Input placeholder="Exam name or code" value={search} onChange={(event) => setSearch(event.target.value)} />
@@ -258,8 +308,8 @@ export function Examinations() {
               <td className="p-3"><Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950">{exam.phase}</Badge></td>
               <td className="p-3">{exam.dates}</td>
               <td className="p-3">{exam.applications}</td>
-              <td className="p-3"><Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950">{exam.status}</Badge></td>
-              <td className="p-3"><div className="flex gap-2"><Button className="h-8 w-8 px-0" onClick={() => editExam(exam.code)} title="Edit"><Pencil size={15} /></Button><Button className="h-8 w-8 bg-secondary px-0" onClick={() => cloneExam(exam.code)} title="Clone"><Copy size={15} /></Button><Button className="h-8 w-8 bg-destructive px-0" onClick={() => deleteExam(exam.code)} title="Archive"><Trash2 size={15} /></Button></div></td>
+              <td className="p-3"><Badge className={isLiveStatus(exam.status) ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950" : ""}>{statusLabel(exam.status)}</Badge></td>
+              <td className="p-3"><div className="flex gap-2"><Button className="h-8 w-8 bg-emerald-600 px-0" onClick={(event) => { event.stopPropagation(); makeLive(exam.code); }} title="Go Live"><PlayCircle size={15} /></Button><Button className="h-8 w-8 px-0" onClick={(event) => { event.stopPropagation(); editExam(exam.code); }} title="Edit"><Pencil size={15} /></Button><Button className="h-8 w-8 bg-secondary px-0" onClick={(event) => { event.stopPropagation(); cloneExam(exam.code); }} title="Clone"><Copy size={15} /></Button><Button className="h-8 w-8 bg-destructive px-0" onClick={(event) => { event.stopPropagation(); deleteExam(exam.code); }} title="Archive"><Trash2 size={15} /></Button></div></td>
             </tr>
           ))}
           {!filteredRows.length && <tr><td className="p-6 text-center text-slate-500" colSpan={8}>No examinations match the selected filters.</td></tr>}

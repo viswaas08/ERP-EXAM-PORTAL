@@ -5,6 +5,7 @@ import * as controller from "../controllers/exam.controller.js";
 
 export const examRoutes = Router();
 examRoutes.get("/", authenticate, controller.list);
+examRoutes.get("/live", authenticate, controller.live);
 examRoutes.get("/:id/workflow-phases", authenticate, controller.phases);
 examRoutes.post("/", authenticate, authorize("exam:create"), audit("EXAM_CREATE"), controller.create);
 examRoutes.patch("/:id", authenticate, authorize("exam:create"), audit("EXAM_UPDATE"), controller.update);
