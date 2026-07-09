@@ -12,34 +12,36 @@ const steps = ["Personal Details", "Address", "Education", "Experience", "Prefer
 const nationalities = ["Indian", "Nepalese", "Bhutanese", "OCI", "Other"];
 const categories = ["General", "OBC", "SC", "ST", "EWS", "PwD", "Ex-Servicemen"];
 const qualifications = ["Bachelor's Degree", "Master's Degree", "B.Tech", "B.Sc", "B.Com", "BA", "Diploma", "PhD", "12th Pass"];
+const emptyRegistrationForm = {
+  name: "",
+  email: "",
+  password: "",
+  phone: "",
+  dateOfBirth: "",
+  nationality: "Indian",
+  category: "General",
+  qualification: "Bachelor's Degree",
+  university: "",
+  percentage: "",
+  year: "",
+  exam: "",
+  centre: "Chennai",
+  address: "",
+  experience: ""
+};
+
 export function CandidatePortal() {
   const { isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
-  const [activeStep, setActiveStep] = usePersistentState("examPortal.candidateRegistration.v2.activeStep", 0);
-  const [submitted, setSubmitted] = usePersistentState("examPortal.candidateRegistration.v2.submitted", false);
-  const [applicationNo, setApplicationNo] = usePersistentState("examPortal.candidateRegistration.v2.applicationNo", "");
-  const [uploadedDocs, setUploadedDocs] = usePersistentState<string[]>("examPortal.candidateRegistration.v2.uploadedDocs", []);
+  const [activeStep, setActiveStep] = useState(0);
+  const [submitted, setSubmitted] = useState(false);
+  const [applicationNo, setApplicationNo] = useState("");
+  const [uploadedDocs, setUploadedDocs] = useState<string[]>([]);
   const [notice, setNotice] = usePersistentState("examPortal.candidateRegistration.v2.notice", "Complete each step and preview before final submission.");
   const [phase, setPhase] = useState<CandidatePhaseSnapshot>(fallbackPhase);
   const [liveExams, setLiveExams] = useState<LiveExam[]>([]);
   const [showPassword, setShowPassword] = useState(false);
-  const [form, setForm] = usePersistentState("examPortal.candidateRegistration.v2.form", {
-    name: "",
-    email: "",
-    password: "",
-    phone: "",
-    dateOfBirth: "",
-    nationality: "Indian",
-    category: "General",
-    qualification: "Bachelor's Degree",
-    university: "",
-    percentage: "",
-    year: "",
-    exam: "",
-    centre: "Chennai",
-    address: "",
-    experience: ""
-  });
+  const [form, setForm] = useState(emptyRegistrationForm);
 
   useEffect(() => {
     getLiveExams()
@@ -96,6 +98,16 @@ export function CandidatePortal() {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
+  function resetRegistrationForm(nextExamId = selectedExam?.id ?? "") {
+    setForm({ ...emptyRegistrationForm, exam: nextExamId });
+    setActiveStep(0);
+    setSubmitted(false);
+    setApplicationNo("");
+    setUploadedDocs([]);
+    setShowPassword(false);
+    setNotice("New registration form is ready.");
+  }
+
   function uploadDoc(doc: string) {
     setUploadedDocs((current) => current.includes(doc) ? current : [...current, doc]);
     setNotice(`${doc} uploaded successfully.`);
@@ -136,6 +148,7 @@ export function CandidatePortal() {
           ? `Application ${application.applicationNo} saved in Neon database.`
           : `Application ${application.applicationNo} saved. Login with ${application.candidateLogin?.email ?? form.email} to open the candidate dashboard.`
       );
+      window.setTimeout(() => resetRegistrationForm(selectedExam.id), 800);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Registration could not be saved to database.");
     }
@@ -160,6 +173,7 @@ export function CandidatePortal() {
           <div><h1 className="text-2xl font-bold">Candidate Registration</h1><p className="text-sm text-slate-500">Current phase: {phase.activePhase?.name ?? "Loading"}</p></div>
           <div className="flex flex-wrap gap-2">
             <Link to="/candidate"><Button>Open Dashboard</Button></Link>
+            <Button className="bg-slate-700" onClick={() => resetRegistrationForm()}>New Registration</Button>
             {isAuthenticated ? (
               <Button className="bg-destructive" onClick={handleLogout}><LogOut size={18} /> Logout</Button>
             ) : (
