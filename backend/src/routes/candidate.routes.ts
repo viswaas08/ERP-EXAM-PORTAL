@@ -47,10 +47,85 @@ function applicationNumber(candidateId: string, examCode: string) {
   return `APP-${new Date().getFullYear()}-${code}-${candidateId.slice(-6).toUpperCase()}`;
 }
 
+async function ensureExamCentres(examId: string) {
+  const existing = await prisma.examCentre.findMany({ where: { examId }, orderBy: [{ city: "asc" }, { name: "asc" }] });
+  if (existing.length) return existing;
+
+  const setting = await prisma.systemSetting.findUnique({ where: { key: "examCityOptions" } });
+  const cities = Array.isArray(setting?.value)
+    ? setting.value as Array<{ city: string; district: string; state: string }>
+    : [{ city: "Chennai", district: "Chennai", state: "Tamil Nadu" }];
+
+  await prisma.examCentre.createMany({
+    data: cities.map((item, index) => ({
+      examId,
+      name: `${item.city} Government Examination Centre`,
+      city: item.city,
+      district: item.district,
+      state: item.state,
+      capacity: 300,
+      availableSystems: 280,
+      gpsLatitude: 8.8 + index * 0.45,
+      gpsLongitude: 76.9 + index * 0.35
+    }))
+  });
+
+  return prisma.examCentre.findMany({ where: { examId }, orderBy: [{ city: "asc" }, { name: "asc" }] });
+}
+
+async function ensureCandidateHallTicket(application: {
+  id: string;
+  applicationNo: string;
+  examinationId: string;
+  status: string;
+  examination: { code: string };
+  hallTicket?: { id: string } | null;
+}) {
+  if (application.hallTicket || application.status !== "APPROVED") return;
+
+  const snapshot = await getCandidatePhaseSnapshot(application.examinationId);
+  if (!snapshot.access.hallTicket && !snapshot.access.archiveDownloads) return;
+
+  const centres = await ensureExamCentres(application.examinationId);
+  const centre = centres[0];
+  if (!centre) return;
+
+  const codePrefix = application.examination.code.replace(/[^A-Z0-9]/gi, "").slice(0, 6).toUpperCase() || "EXAM";
+  const rollNumber = `${codePrefix}${application.id.slice(-8).toUpperCase()}`;
+  await prisma.hallTicket.create({
+    data: {
+      applicationId: application.id,
+      examId: application.examinationId,
+      centreId: centre.id,
+      rollNumber,
+      seatNumber: `${centre.city.slice(0, 3).toUpperCase()}-0001`,
+      qrCode: `QR:${application.applicationNo}:${rollNumber}`,
+      barcode: `BAR:${application.applicationNo}:${rollNumber}`,
+      reportingTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    }
+  }).catch(() => undefined);
+}
+
 candidateRoutes.get("/dashboard", authenticate, async (req: AuthRequest, res) => {
   if (!req.user) throw new AppError(401, "Authentication required");
   const candidate = await ensureCandidate(req.user.id);
-  const applications = await prisma.application.findMany({
+  let applications = await prisma.application.findMany({
+    where: { candidateId: candidate.id },
+    include: {
+      examination: true,
+      documents: true,
+      history: { orderBy: { createdAt: "asc" } },
+      hallTicket: { include: { centre: true } },
+      result: true
+    },
+    orderBy: { submittedAt: "desc" }
+  });
+
+  for (const application of applications) {
+    await ensureCandidateHallTicket(application);
+  }
+
+  applications = await prisma.application.findMany({
     where: { candidateId: candidate.id },
     include: {
       examination: true,

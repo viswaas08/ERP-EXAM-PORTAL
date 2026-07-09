@@ -1,4 +1,4 @@
-import { Download, FileText, LogOut, MonitorPlay, Ticket } from "lucide-react";
+import { Download, FileText, LogOut, MonitorPlay, RefreshCw, Ticket } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -48,7 +48,11 @@ export function CandidateDashboard() {
       .then((data) => {
         setDashboard(data);
         setPhase(data.phase);
-        setSelectedApplicationNo((current) => current || data.applications?.[0]?.applicationNo || data.application?.applicationNo || "");
+        const applications = data.applications ?? (data.application ? [data.application] : []);
+        setSelectedApplicationNo((current) => {
+          if (applications.some((item) => item.applicationNo === current)) return current;
+          return applications.find((item) => item.hallTicket)?.applicationNo || applications[0]?.applicationNo || "";
+        });
         setSelectedPhaseName(data.phase.activePhase?.name ?? "");
         setNotice(data.application ? `${data.application.applicationNo} loaded from Neon database.` : "No database application found yet. Submit registration first.");
       })
@@ -84,6 +88,13 @@ export function CandidateDashboard() {
   }));
   const activePhaseIndex = Math.max(0, workflowPhases.findIndex((item) => item.id === phase.activePhase?.id || item.name === phase.activePhase?.name || item.status === "OPEN"));
   const publishedResult = selectedApplication?.result?.status === "PUBLISHED" ? selectedApplication.result : null;
+  const hallTicketMessage = selectedApplication?.hallTicket
+    ? `Roll No ${selectedApplication.hallTicket.rollNumber}, ${selectedApplication.hallTicket.centre.name}.`
+    : selectedApplication?.status !== "APPROVED"
+      ? "Hall ticket unlocks after admin approves this application."
+      : phase.access.hallTicket || phase.access.archiveDownloads
+        ? "Hall ticket is being generated. This page refreshes automatically."
+        : `Hall ticket is locked during ${phase.activePhase?.name ?? "the current phase"}.`;
 
   function handleLogout() {
     logout();
@@ -127,8 +138,9 @@ export function CandidateDashboard() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><h1 className="text-2xl font-bold">Candidate Dashboard</h1><p className="text-sm text-slate-500">Current examination phase, application timeline, downloads, and result access.</p></div>
           <div className="flex flex-wrap items-center gap-2">
-            {applications.length > 0 && <Select className="max-w-xs" value={selectedApplication?.applicationNo ?? ""} onChange={(event) => setSelectedApplicationNo(event.target.value)}>{applications.map((item) => <option key={item.applicationNo} value={item.applicationNo}>{item.examination.code} - {item.applicationNo}</option>)}</Select>}
+            {applications.length > 0 && <Select className="max-w-xs" value={selectedApplication?.applicationNo ?? ""} onChange={(event) => setSelectedApplicationNo(event.target.value)}>{applications.map((item) => <option key={item.applicationNo} value={item.applicationNo}>{item.examination.code} - {item.applicationNo} - {item.hallTicket ? "Hall Ticket Ready" : item.status}</option>)}</Select>}
             <Badge className="bg-emerald-50 text-emerald-700">Current Phase: {phase.activePhase?.name ?? "Loading"}</Badge>
+            <Button className="bg-secondary" onClick={() => { void loadDashboard(); setNotice("Dashboard refreshed from database."); }}><RefreshCw size={18} /> Refresh</Button>
             <Button className="bg-destructive" onClick={handleLogout}><LogOut size={18} /> Logout</Button>
           </div>
         </div>
@@ -148,7 +160,7 @@ export function CandidateDashboard() {
               return <button className={`rounded-md border border-border p-3 text-left ${isCurrent ? "bg-primary text-white" : selectedPhaseName === item.name ? "bg-muted" : ""}`} key={item.id} onClick={() => { setSelectedPhaseName(item.name); setNotice(`${item.name} selected. Current live phase is ${phase.activePhase?.name ?? "not available"}.`); }}><Badge>{isCurrent ? "Current" : isDone ? "Done" : "Pending"}</Badge><p className="mt-2 text-sm font-semibold">{item.name}</p></button>;
             })}</div></Card>
             <div className="grid gap-4 md:grid-cols-3">
-              <Card><Ticket className="mb-3 text-primary" /><h2 className="font-semibold">Hall Ticket</h2><p className="my-3 text-sm text-slate-500">{selectedApplication.hallTicket ? `Roll No ${selectedApplication.hallTicket.rollNumber}, ${selectedApplication.hallTicket.centre.name}.` : "No hall ticket has been generated for this application."}</p><Button disabled={!selectedApplication.hallTicket} onClick={downloadHallTicketPdf}><Download size={18} /> Download PDF</Button></Card>
+              <Card><Ticket className="mb-3 text-primary" /><h2 className="font-semibold">Hall Ticket</h2><p className="my-3 text-sm text-slate-500">{hallTicketMessage}</p><Button disabled={!selectedApplication.hallTicket} onClick={downloadHallTicketPdf}><Download size={18} /> Download PDF</Button></Card>
               <Card><MonitorPlay className="mb-3 text-secondary" /><h2 className="font-semibold">Online Examination</h2><p className="my-3 text-sm text-slate-500">{phase.access.onlineExam ? "Exam console is enabled for this application." : `Exam locked during ${phase.activePhase?.name ?? "the current phase"}.`}</p>{phase.access.onlineExam ? <Link to="/exam"><Button>Open Exam Console</Button></Link> : <Button disabled>Open Exam Console</Button>}</Card>
               <Card><FileText className="mb-3 text-amber-600" /><h2 className="font-semibold">Result</h2><p className="my-3 text-sm text-slate-500">{resultVisible && publishedResult ? `Marks ${publishedResult.marks}, Rank ${publishedResult.rank}, ${publishedResult.qualified ? "Qualified" : "Not Qualified"}.` : "No result has been published for this application."}</p><div className="flex flex-wrap gap-2"><Button disabled={!publishedResult} onClick={() => { setResultVisible(true); setNotice("Result opened from database."); }}>View Result</Button>{resultVisible && publishedResult && <Button className="bg-secondary" onClick={() => downloadFile("score-card.txt", `Score Card\nMarks: ${publishedResult.marks}\nRank: ${publishedResult.rank}\nQualified: ${publishedResult.qualified ? "Yes" : "No"}`)}>Download</Button>}</div></Card>
             </div>
