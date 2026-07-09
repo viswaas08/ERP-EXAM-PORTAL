@@ -1,6 +1,10 @@
 import { Play, Plus } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, Card, Select } from "../components/ui";
+const fields = ["Qualification", "Percentage", "Age", "Nationality", "Category", "Documents Verified", "Experience Years", "State", "Application Status"];
+const operators = ["equals", "not equals", "greater than", "greater than or equal", "less than", "less than or equal", "contains", "is empty", "is not empty"];
+const values = ["Bachelor's Degree", "B.Tech", "60", "70", "30", "Indian", "General", "OBC", "Yes", "No", "Pending", "Approved"];
+const connectors = ["AND", "OR", "NOT", "THEN Approve", "THEN Reject", "THEN Manual Queue", "THEN Return For Correction"];
 
 export function EligibilityRules() {
   const [rules, setRules] = useState(["Auto Approval", "Manual Queue"]);
@@ -30,9 +34,9 @@ export function EligibilityRules() {
           <div className="rounded-md border border-border p-4">
             <div className="mb-3 flex items-center gap-2"><Badge>IF</Badge><Badge>Priority 1</Badge><Badge>Auto Approval</Badge></div>
             <div className="grid gap-3 md:grid-cols-4">
-              <Select><option>Qualification</option></Select><Select><option>equals</option></Select><Select><option>Bachelor's Degree</option></Select><Select><option>AND</option></Select>
-              <Select><option>Percentage</option></Select><Select><option>greater than or equal</option></Select><Select><option>60</option></Select><Select><option>AND</option></Select>
-              <Select><option>Age</option></Select><Select><option>less than or equal</option></Select><Select><option>30</option></Select><Select><option>THEN Approve</option></Select>
+              <Select>{fields.map((item) => <option key={item}>{item}</option>)}</Select><Select>{operators.map((item) => <option key={item}>{item}</option>)}</Select><Select>{values.map((item) => <option key={item}>{item}</option>)}</Select><Select>{connectors.map((item) => <option key={item}>{item}</option>)}</Select>
+              <Select>{fields.map((item) => <option key={item}>{item}</option>)}</Select><Select>{operators.map((item) => <option key={item}>{item}</option>)}</Select><Select>{values.map((item) => <option key={item}>{item}</option>)}</Select><Select>{connectors.map((item) => <option key={item}>{item}</option>)}</Select>
+              <Select>{fields.map((item) => <option key={item}>{item}</option>)}</Select><Select>{operators.map((item) => <option key={item}>{item}</option>)}</Select><Select>{values.map((item) => <option key={item}>{item}</option>)}</Select><Select>{connectors.map((item) => <option key={item}>{item}</option>)}</Select>
             </div>
           </div>
           <div className="rounded-md border border-border p-4">

@@ -13,3 +13,15 @@ export async function create(req: Request, res: Response) {
 export async function clone(req: Request, res: Response) {
   res.status(201).json(await examService.cloneExam(String(req.params.id)));
 }
+
+export async function phases(req: Request, res: Response) {
+  res.json(await examService.listWorkflowPhases(String(req.params.id)));
+}
+
+export async function activatePhase(req: Request, res: Response) {
+  res.json(await examService.activateWorkflowPhase(String(req.params.id), String(req.params.phaseId)));
+}
+
+export async function candidatePhase(req: Request, res: Response) {
+  res.json(await examService.getCandidatePhaseSnapshot(req.query.examId as string | undefined));
+}

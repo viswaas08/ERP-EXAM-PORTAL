@@ -122,39 +122,8 @@ async function main() {
   }
   const centres = await prisma.examCentre.findMany();
 
-  const applications = [];
-  for (let i = 0; i < 500; i++) {
-    const user = await prisma.user.create({ data: { name: faker.person.fullName(), email: `candidate${i}@exam.gov`, passwordHash, roleId: candidateRole.id } });
-    const candidate = await prisma.candidate.create({ data: { userId: user.id } });
-    await prisma.candidateProfile.create({
-      data: {
-        candidateId: candidate.id,
-        phone: faker.phone.number(),
-        dateOfBirth: faker.date.birthdate({ min: 19, max: 32, mode: "age" }),
-        nationality: "Indian",
-        category: ["General", "OBC", "SC", "ST", "EWS"][i % 5],
-        qualification: qualifications[i % qualifications.length],
-        percentage: faker.number.float({ min: 45, max: 95, fractionDigits: 2 }),
-        state: states[i % states.length],
-        district: faker.location.county(),
-        address: faker.location.streetAddress()
-      }
-    });
-    const app = await prisma.application.create({
-      data: {
-        applicationNo: `APP-2026-${String(i + 1).padStart(6, "0")}`,
-        candidateId: candidate.id,
-        examinationId: exams[i % exams.length].id,
-        status: statuses[i % statuses.length],
-        history: { create: [{ status: "SUBMITTED", remarks: "Application submitted" }] }
-      }
-    });
-    applications.push(app);
-  }
-
-  for (let i = 0; i < 2500; i++) {
-    await prisma.applicationDocument.create({ data: { applicationId: applications[i % applications.length].id, type: ["PHOTO", "SIGNATURE", "IDENTITY", "DEGREE", "CATEGORY"][i % 5], url: faker.image.url(), status: statuses[i % 3] } });
-  }
+  // Candidate and application lists are intentionally not bulk-seeded.
+  // The demo candidate login remains available, but the ERP starts with an empty applicant register.
 
   for (let i = 0; i < 30; i++) {
     await prisma.eligibilityRule.create({
@@ -199,22 +168,7 @@ async function main() {
     });
   }
 
-  for (let i = 0; i < 500; i++) {
-    const app = applications[i];
-    await prisma.hallTicket.create({
-      data: {
-        applicationId: app.id,
-        examId: app.examinationId,
-        centreId: centres[i % centres.length].id,
-        rollNumber: `26${String(i + 1).padStart(6, "0")}`,
-        seatNumber: `LAB-${(i % 10) + 1}-S${i + 1}`,
-        qrCode: `QR-${app.applicationNo}`,
-        barcode: `BAR-${app.applicationNo}`,
-        reportingTime: faker.date.future()
-      }
-    });
-    await prisma.result.create({ data: { applicationId: app.id, examId: app.examinationId, marks: 80 + (i % 110), percentage: 40 + (i % 55), rank: i + 1, percentile: 99 - i / 10, qualified: i % 4 !== 0, status: "PUBLISHED" } });
-  }
+  // Hall tickets and results are generated only after real applications exist.
 
   for (let i = 0; i < 100; i++) {
     await prisma.notification.create({ data: { examId: exams[i % exams.length].id, title: faker.company.catchPhrase(), body: faker.lorem.paragraph(), type: ["BANNER", "POPUP", "NOTICE"][i % 3], publishAt: faker.date.recent() } });

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Badge, Button, Card, Input, Select } from "../components/ui";
 import { formSections } from "../data/demo";
 
-const types = ["Text", "Email", "Number", "Date", "Dropdown", "Radio", "Checkbox", "File Upload", "Image Upload", "Percentage", "CGPA", "Phone", "Address"];
+const types = ["Text", "Textarea", "Email", "Password", "Number", "Date", "Dropdown", "Radio", "Checkbox", "Multi Select", "File Upload", "Image Upload", "Percentage", "CGPA", "Phone", "Address", "State", "District", "Pincode", "Aadhaar Masked", "PAN", "Experience Years", "Declaration"];
 
 export function FormBuilder() {
   const [sections, setSections] = useState(formSections);

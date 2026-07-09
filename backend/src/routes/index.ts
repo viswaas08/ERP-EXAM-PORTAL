@@ -15,6 +15,13 @@ apiRoutes.use("/examinations", examRoutes);
 apiRoutes.use("/applications", applicationRoutes);
 apiRoutes.use("/eligibility-rules", ruleRoutes);
 
+apiRoutes.get("/candidate/active-phase", async (req, res, next) => {
+  try {
+    res.json(await import("../services/exam.service.js").then((service) => service.getCandidatePhaseSnapshot(req.query.examId as string | undefined)));
+  } catch (error) {
+    next(error);
+  }
+});
 apiRoutes.get("/notifications", async (_req, res) => res.json(await prisma.notification.findMany({ orderBy: { createdAt: "desc" }, take: 20 })));
 apiRoutes.get("/audit-logs", async (_req, res) => res.json(await prisma.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 })));
 apiRoutes.get("/hall-tickets/:id.pdf", async (req, res) => streamPortalPdf(res, "Hall Ticket", [`Hall Ticket ID: ${req.params.id}`, "QR Code: embedded in production renderer", "Reporting Time: 08:30 AM"]));

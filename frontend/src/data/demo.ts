@@ -35,13 +35,13 @@ export const navItems = [
 
 export const stats = [
   { label: "Total Examinations", value: 10, icon: GraduationCap, tone: "text-blue-700" },
-  { label: "Total Candidates", value: 500, icon: Users, tone: "text-teal-700" },
-  { label: "Applications", value: 500, icon: FileText, tone: "text-amber-700" },
-  { label: "Approved", value: 318, icon: BadgeCheck, tone: "text-emerald-700" },
-  { label: "Pending", value: 122, icon: FileClock, tone: "text-orange-700" },
-  { label: "Rejected", value: 60, icon: FileCheck2, tone: "text-red-700" },
-  { label: "Hall Tickets", value: 500, icon: Ticket, tone: "text-indigo-700" },
-  { label: "Appeared", value: 432, icon: ClipboardCheck, tone: "text-cyan-700" }
+  { label: "Total Candidates", value: 0, icon: Users, tone: "text-teal-700" },
+  { label: "Applications", value: 0, icon: FileText, tone: "text-amber-700" },
+  { label: "Approved", value: 0, icon: BadgeCheck, tone: "text-emerald-700" },
+  { label: "Pending", value: 0, icon: FileClock, tone: "text-orange-700" },
+  { label: "Rejected", value: 0, icon: FileCheck2, tone: "text-red-700" },
+  { label: "Hall Tickets", value: 0, icon: Ticket, tone: "text-indigo-700" },
+  { label: "Appeared", value: 0, icon: ClipboardCheck, tone: "text-cyan-700" }
 ];
 
 export const registrationTrend = [
@@ -55,9 +55,9 @@ export const registrationTrend = [
 ];
 
 export const statusData = [
-  { name: "Approved", value: 318 },
-  { name: "Pending", value: 122 },
-  { name: "Rejected", value: 60 }
+  { name: "Approved", value: 0 },
+  { name: "Pending", value: 0 },
+  { name: "Rejected", value: 0 }
 ];
 
 export const exams = [
@@ -67,7 +67,7 @@ export const exams = [
     department: "Administrative Services",
     phase: "Verification",
     dates: "12 Aug 2026 - 18 Aug 2026",
-    applications: 142,
+    applications: 0,
     status: "Active"
   },
   {
@@ -76,7 +76,7 @@ export const exams = [
     department: "Higher Education",
     phase: "Hall Ticket Release",
     dates: "02 Sep 2026",
-    applications: 96,
+    applications: 0,
     status: "Active"
   },
   {
@@ -85,22 +85,22 @@ export const exams = [
     department: "Public Works",
     phase: "Registration",
     dates: "01 Jul 2026 - 31 Jul 2026",
-    applications: 184,
+    applications: 0,
     status: "Open"
   }
 ];
 
 export const phases = ["Registration", "Correction Window", "Verification", "Hall Ticket Release", "Online Examination", "Result Publication"];
 
-export const applications = Array.from({ length: 12 }, (_, index) => ({
-  id: `APP-2026-${String(index + 1).padStart(5, "0")}`,
-  name: ["Aarav Sharma", "Diya Nair", "Kabir Khan", "Meera Iyer"][index % 4],
-  exam: exams[index % exams.length].code,
-  category: ["General", "OBC", "SC", "EWS"][index % 4],
-  state: ["Maharashtra", "Karnataka", "Delhi", "Tamil Nadu"][index % 4],
-  score: 58 + index * 2,
-  status: ["Approved", "Pending", "Returned", "Rejected"][index % 4]
-}));
+export const applications: Array<{
+  id: string;
+  name: string;
+  exam: string;
+  category: string;
+  state: string;
+  score: number;
+  status: string;
+}> = [];
 
 export const formSections = [
   {
