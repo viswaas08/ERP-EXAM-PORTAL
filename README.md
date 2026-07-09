@@ -49,7 +49,8 @@ Backend: `http://localhost:8080/api`
 
 - Super Admin: `admin@exam.gov` / `Password@123`
 - Candidates are not seeded. They must register first, then login with the email and password used during registration.
-- Examinations and applications are not seeded. Create examinations from the admin portal before opening public registration.
+- Seed creates one active examination, `ISA-2026`, with a 100-question paper across English, Maths, Chemistry, and Physics.
+- Applications are not seeded. Candidates must register and submit applications normally.
 
 ## Deployment
 

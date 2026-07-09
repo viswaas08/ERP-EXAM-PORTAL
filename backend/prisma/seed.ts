@@ -19,6 +19,49 @@ const tamilNaduExamCities = [
   { city: "Nagercoil", district: "Kanniyakumari" }
 ];
 
+const sectionBlueprints = [
+  {
+    subject: "English",
+    topics: ["Grammar", "Vocabulary", "Reading Comprehension", "Sentence Correction", "Idioms"],
+    prompt: (index: number) => `Choose the grammatically correct sentence for English question ${index}.`,
+    options: (index: number) => [
+      `The committee has approved proposal ${index}.`,
+      `The committee have approve proposal ${index}.`,
+      `The committee approving proposal ${index}.`,
+      `The committee approvedly proposal ${index}.`
+    ],
+    explanation: (index: number) => `Question ${index} checks subject-verb agreement and standard sentence structure.`
+  },
+  {
+    subject: "Maths",
+    topics: ["Algebra", "Arithmetic", "Geometry", "Mensuration", "Data Interpretation"],
+    prompt: (index: number) => `If x = ${index} and y = ${index + 4}, what is x + y?`,
+    options: (index: number) => [String(index * 2 + 4), String(index + 4), String(index * 2), String(index * 2 + 6)],
+    explanation: (index: number) => `Add ${index} and ${index + 4} to get ${index * 2 + 4}.`
+  },
+  {
+    subject: "Chemistry",
+    topics: ["Atomic Structure", "Periodic Table", "Chemical Bonding", "Acids and Bases", "Organic Chemistry"],
+    prompt: (index: number) => `Which option best represents a stable chemical principle in chemistry question ${index}?`,
+    options: (_index: number) => [
+      "Noble gases generally have complete valence shells.",
+      "Acids always have a pH greater than 7.",
+      "Electrons are found only inside the nucleus.",
+      "Ionic compounds never conduct electricity in solution."
+    ],
+    explanation: (index: number) => `Question ${index} tests the stable valence shell concept for noble gases.`
+  },
+  {
+    subject: "Physics",
+    topics: ["Mechanics", "Optics", "Electricity", "Thermodynamics", "Modern Physics"],
+    prompt: (index: number) => `A body moves with constant velocity in physics question ${index}. What is its acceleration?`,
+    options: (_index: number) => ["Zero", "Equal to velocity", "Always 9.8 m/s²", "Infinite"],
+    explanation: (index: number) => `Question ${index} checks that constant velocity means no change in velocity, so acceleration is zero.`
+  }
+];
+
+const workflowPhaseNames = ["Registration", "Correction Window", "Document Verification", "Eligibility Verification", "Hall Ticket Release", "Online Examination", "Result Publication", "Archive"];
+
 async function main() {
   await prisma.auditLog.deleteMany();
   await prisma.candidateResponse.deleteMany();
@@ -85,6 +128,88 @@ async function main() {
     }
   });
 
+  const now = new Date();
+  const examination = await prisma.examination.create({
+    data: {
+      name: "Integrated Science and Aptitude Entrance Examination",
+      code: "ISA-2026",
+      description: "Seeded operational examination paper with English, Maths, Chemistry, and Physics sections.",
+      department: "Examination Authority",
+      durationMinutes: 180,
+      maximumMarks: 100,
+      passingMarks: 40,
+      negativeMarking: false,
+      languages: ["English"],
+      maximumAttempts: 1,
+      status: "OPEN",
+      workflowPhases: {
+        create: workflowPhaseNames.map((name, index) => ({
+          name,
+          status: name === "Online Examination" ? "OPEN" : "SCHEDULED",
+          opensAt: new Date(now.getTime() + (index - 5) * 24 * 60 * 60 * 1000),
+          closesAt: new Date(now.getTime() + (index - 4) * 24 * 60 * 60 * 1000)
+        }))
+      },
+      centres: {
+        create: tamilNaduExamCities.map((item, index) => ({
+          name: `${item.city} Government Examination Centre`,
+          city: item.city,
+          district: item.district,
+          state: "Tamil Nadu",
+          capacity: 300,
+          availableSystems: 280,
+          gpsLatitude: 8.8 + index * 0.45,
+          gpsLongitude: 76.9 + index * 0.35
+        }))
+      }
+    }
+  });
+
+  const questionBank = await prisma.questionBank.create({
+    data: {
+      examId: examination.id,
+      name: "ISA-2026 Main Paper - 100 Questions"
+    }
+  });
+
+  for (const blueprint of sectionBlueprints) {
+    const subject = await prisma.subject.create({ data: { name: blueprint.subject } });
+    const topics = [];
+    for (const name of blueprint.topics) {
+      topics.push(await prisma.topic.create({ data: { subjectId: subject.id, name } }));
+    }
+
+    for (let i = 1; i <= 25; i += 1) {
+      const absoluteQuestionNumber = (sectionBlueprints.findIndex((item) => item.subject === blueprint.subject) * 25) + i;
+      const topic = topics[(i - 1) % topics.length];
+      const question = await prisma.question.create({
+        data: {
+          bankId: questionBank.id,
+          subjectId: subject.id,
+          topicId: topic.id,
+          questionType: "MCQ",
+          prompt: blueprint.prompt(i),
+          difficulty: i <= 8 ? "Easy" : i <= 18 ? "Medium" : "Hard",
+          explanation: blueprint.explanation(i),
+          marks: 1,
+          negativeMarks: 0,
+          tags: [blueprint.subject, topic.name, "ISA-2026", `Q${absoluteQuestionNumber}`]
+        }
+      });
+
+      const options = blueprint.options(i);
+      for (const [optionIndex, text] of options.entries()) {
+        await prisma.questionOption.create({
+          data: {
+            questionId: question.id,
+            text,
+            isCorrect: optionIndex === 0
+          }
+        });
+      }
+    }
+  }
+
   await prisma.systemSetting.createMany({
     data: [
       { key: "organizationName", value: "National Examination Authority" },
@@ -93,7 +218,7 @@ async function main() {
       { key: "uploadLimitMb", value: 10 },
       { key: "sessionTimeoutMinutes", value: 30 },
       { key: "examCityOptions", value: tamilNaduExamCities.map((item) => ({ ...item, state: "Tamil Nadu" })) },
-      { key: "seedProfile", value: { mode: "production-clean", seededUsers: ["admin@exam.gov"], seededCandidates: 0, seededApplications: 0 } }
+      { key: "seedProfile", value: { mode: "exam-paper-ready", seededUsers: ["admin@exam.gov"], seededCandidates: 0, seededApplications: 0, seededExams: 1, seededQuestions: 100 } }
     ]
   });
 }

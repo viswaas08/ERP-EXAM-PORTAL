@@ -3,31 +3,59 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Button, Card } from "../components/ui";
-import { fallbackPhase, getCandidatePhase, type CandidatePhaseSnapshot } from "../lib/workflow";
+import { fallbackPhase, type CandidatePhaseSnapshot } from "../lib/workflow";
 import { usePersistentState } from "../lib/usePersistentState";
+import { api } from "../lib/api";
 
-const numbers = Array.from({ length: 30 }, (_, i) => i + 1);
-const options = ["Election Commission", "Union Public Service Commission", "Finance Commission", "Planning Commission"];
+type OnlineQuestion = {
+  id: string;
+  number: number;
+  subject: string;
+  topic: string;
+  questionType: string;
+  prompt: string;
+  difficulty: string;
+  marks: number;
+  negativeMarks: number;
+  options: Array<{ id: string; text: string }>;
+};
+
+type OnlinePaper = {
+  exam: { id: string; code: string; name: string };
+  activePhase?: CandidatePhaseSnapshot["activePhase"];
+  access: CandidatePhaseSnapshot["access"];
+  questions: OnlineQuestion[];
+};
 
 export function OnlineExam() {
   const { logout } = useAuth();
   const navigate = useNavigate();
-  const [current, setCurrent] = usePersistentState("examPortal.onlineExam.v2.current", 1);
-  const [answers, setAnswers] = usePersistentState<Record<number, string>>("examPortal.onlineExam.v2.answers", {});
-  const [marked, setMarked] = usePersistentState<number[]>("examPortal.onlineExam.v2.marked", []);
-  const [submitted, setSubmitted] = usePersistentState("examPortal.onlineExam.v2.submitted", false);
-  const [notice, setNotice] = usePersistentState("examPortal.onlineExam.v2.notice", "Exam console is locked until the online examination phase is active.");
+  const [currentIndex, setCurrentIndex] = usePersistentState("examPortal.onlineExam.v3.currentIndex", 0);
+  const [answers, setAnswers] = usePersistentState<Record<string, string>>("examPortal.onlineExam.v3.answers", {});
+  const [marked, setMarked] = usePersistentState<string[]>("examPortal.onlineExam.v3.marked", []);
+  const [submitted, setSubmitted] = usePersistentState("examPortal.onlineExam.v3.submitted", false);
+  const [notice, setNotice] = usePersistentState("examPortal.onlineExam.v3.notice", "Loading database question paper.");
   const [phase, setPhase] = useState<CandidatePhaseSnapshot>(fallbackPhase);
+  const [paper, setPaper] = useState<OnlinePaper | null>(null);
 
+  const questions = paper?.questions ?? [];
+  const currentQuestion = questions[Math.min(currentIndex, Math.max(questions.length - 1, 0))];
   const attempted = useMemo(() => Object.keys(answers).length, [answers]);
+  const sectionCounts = useMemo(() => {
+    return questions.reduce<Record<string, number>>((acc, question) => {
+      acc[question.subject] = (acc[question.subject] ?? 0) + 1;
+      return acc;
+    }, {});
+  }, [questions]);
 
   useEffect(() => {
-    getCandidatePhase()
-      .then((snapshot) => {
-        setPhase(snapshot);
-        setNotice(snapshot.access.onlineExam ? "Online examination phase is active." : `Exam locked during ${snapshot.activePhase?.name}.`);
+    api<OnlinePaper>("/questions/online/active")
+      .then((data) => {
+        setPaper(data);
+        setPhase({ exam: data.exam, activePhase: data.activePhase, access: data.access });
+        setNotice(data.access.onlineExam ? `${data.exam.code} loaded with ${data.questions.length} database questions.` : `Exam locked during ${data.activePhase?.name}.`);
       })
-      .catch(() => setNotice("Workflow service is not reachable. Exam console remains locked."));
+      .catch((error) => setNotice(error instanceof Error ? error.message : "Could not load the online exam paper."));
   }, []);
 
   function handleLogout() {
@@ -36,29 +64,29 @@ export function OnlineExam() {
   }
 
   function saveAndNext() {
-    if (!phase.access.onlineExam) {
-      setNotice(`Saving is locked during ${phase.activePhase?.name}.`);
+    if (!phase.access.onlineExam || !currentQuestion) {
+      setNotice(`Saving is locked during ${phase.activePhase?.name ?? "the current phase"}.`);
       return;
     }
-    setNotice(`Question ${current} saved.`);
-    setCurrent((value) => Math.min(30, value + 1));
+    setNotice(`Question ${currentQuestion.number || currentIndex + 1} saved.`);
+    setCurrentIndex((value) => Math.min(questions.length - 1, value + 1));
   }
 
   function markForReview() {
-    if (!phase.access.onlineExam) {
-      setNotice(`Review marking is locked during ${phase.activePhase?.name}.`);
+    if (!phase.access.onlineExam || !currentQuestion) {
+      setNotice(`Review marking is locked during ${phase.activePhase?.name ?? "the current phase"}.`);
       return;
     }
-    setMarked((currentMarked) => currentMarked.includes(current) ? currentMarked.filter((item) => item !== current) : [...currentMarked, current]);
-    setNotice(`Question ${current} review flag toggled.`);
+    setMarked((currentMarked) => currentMarked.includes(currentQuestion.id) ? currentMarked.filter((item) => item !== currentQuestion.id) : [...currentMarked, currentQuestion.id]);
+    setNotice(`Question ${currentQuestion.number || currentIndex + 1} review flag toggled.`);
   }
 
   return (
     <main className="min-h-screen bg-background">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card p-4">
-        <div><h1 className="font-bold">National Recruitment Examination</h1><p className="text-sm text-slate-500">Section A: General Studies</p></div>
+        <div><h1 className="font-bold">{paper?.exam.name ?? "Online Examination"}</h1><p className="text-sm text-slate-500">{paper?.exam.code ?? "Loading"} | {Object.entries(sectionCounts).map(([name, count]) => `${name}: ${count}`).join(" | ")}</p></div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="rounded-md bg-destructive px-4 py-2 font-bold text-white">01:24:36</div>
+          <div className="rounded-md bg-destructive px-4 py-2 font-bold text-white">03:00:00</div>
           <Button className="bg-slate-800" onClick={handleLogout}><LogOut size={18} /> Logout</Button>
         </div>
       </header>
@@ -66,15 +94,21 @@ export function OnlineExam() {
       <div className="grid gap-4 p-4 lg:grid-cols-[1fr_320px]">
         <Card>
           {!phase.access.onlineExam && <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">This exam console is disabled until the admin activates Online Examination.</div>}
-          <div className="mb-4 flex items-center justify-between"><h2 className="font-semibold">Question {current}</h2><span className="text-sm text-slate-500">Marks 2, Negative 0.5</span></div>
-          <p className="mb-5 text-lg font-semibold">Which constitutional body conducts recruitment examinations for civil services in India?</p>
-          <div className="space-y-3">{options.map((option) => <label className={`flex items-center gap-3 rounded-md border border-border p-4 ${answers[current] === option ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950" : ""}`} key={option}><input checked={answers[current] === option} disabled={submitted || !phase.access.onlineExam} name="answer" type="radio" onChange={() => { setAnswers((currentAnswers) => ({ ...currentAnswers, [current]: option })); setNotice(`Answer selected for question ${current}.`); }} />{option}</label>)}</div>
-          <div className="mt-6 flex flex-wrap gap-2"><Button className="bg-secondary" disabled={submitted || !phase.access.onlineExam} onClick={saveAndNext}><Save size={18} /> Save & Next</Button><Button disabled={submitted || !phase.access.onlineExam} onClick={markForReview}><Flag size={18} /> {marked.includes(current) ? "Unmark Review" : "Mark For Review"}</Button><Button className="bg-destructive" disabled={submitted || !phase.access.onlineExam} onClick={() => { setSubmitted(true); setNotice("Exam submitted."); }}><Send size={18} /> Submit</Button></div>
+          {!currentQuestion ? (
+            <div className="rounded-md bg-muted p-4 text-sm font-semibold">No questions are available for the active examination.</div>
+          ) : (
+            <>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">Question {currentQuestion.number || currentIndex + 1}</h2><span className="text-sm text-slate-500">{currentQuestion.subject} | {currentQuestion.topic} | Marks {currentQuestion.marks}, Negative {currentQuestion.negativeMarks}</span></div>
+              <p className="mb-5 text-lg font-semibold">{currentQuestion.prompt}</p>
+              <div className="space-y-3">{currentQuestion.options.map((option) => <label className={`flex items-center gap-3 rounded-md border border-border p-4 ${answers[currentQuestion.id] === option.id ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950" : ""}`} key={option.id}><input checked={answers[currentQuestion.id] === option.id} disabled={submitted || !phase.access.onlineExam} name="answer" type="radio" onChange={() => { setAnswers((currentAnswers) => ({ ...currentAnswers, [currentQuestion.id]: option.id })); setNotice(`Answer selected for question ${currentQuestion.number || currentIndex + 1}.`); }} />{option.text}</label>)}</div>
+              <div className="mt-6 flex flex-wrap gap-2"><Button className="bg-secondary" disabled={submitted || !phase.access.onlineExam} onClick={saveAndNext}><Save size={18} /> Save & Next</Button><Button disabled={submitted || !phase.access.onlineExam} onClick={markForReview}><Flag size={18} /> {marked.includes(currentQuestion.id) ? "Unmark Review" : "Mark For Review"}</Button><Button className="bg-destructive" disabled={submitted || !phase.access.onlineExam} onClick={() => { setSubmitted(true); setNotice("Exam submitted."); }}><Send size={18} /> Submit</Button></div>
+            </>
+          )}
         </Card>
         <Card>
           <h2 className="mb-4 font-semibold">Question Palette</h2>
-          <div className="grid grid-cols-5 gap-2">{numbers.map((n) => <button className={`h-10 rounded-md text-sm font-bold ${n === current ? "bg-primary text-white" : marked.includes(n) ? "bg-amber-500 text-white" : answers[n] ? "bg-emerald-600 text-white" : "bg-muted"}`} key={n} onClick={() => { setCurrent(n); setNotice(`Question ${n} opened.`); }}>{n}</button>)}</div>
-          <div className="mt-5 space-y-2 text-sm"><p>Attempted: {attempted}</p><p>Skipped: {30 - attempted}</p><p>Marked for review: {marked.length}</p><p>Submission: {submitted ? "Submitted" : "Not submitted"}</p></div>
+          <div className="grid grid-cols-5 gap-2">{questions.map((question, index) => <button className={`h-10 rounded-md text-sm font-bold ${index === currentIndex ? "bg-primary text-white" : marked.includes(question.id) ? "bg-amber-500 text-white" : answers[question.id] ? "bg-emerald-600 text-white" : "bg-muted"}`} key={question.id} onClick={() => { setCurrentIndex(index); setNotice(`Question ${question.number || index + 1} opened.`); }}>{question.number || index + 1}</button>)}</div>
+          <div className="mt-5 space-y-2 text-sm"><p>Total questions: {questions.length}</p><p>Attempted: {attempted}</p><p>Skipped: {Math.max(questions.length - attempted, 0)}</p><p>Marked for review: {marked.length}</p><p>Submission: {submitted ? "Submitted" : "Not submitted"}</p></div>
         </Card>
       </div>
     </main>

@@ -7,6 +7,7 @@ import { dashboardRoutes } from "./dashboard.routes.js";
 import { stateRoutes } from "./state.routes.js";
 import { candidateRoutes } from "./candidate.routes.js";
 import { hallTicketRoutes } from "./hall-ticket.routes.js";
+import { questionRoutes } from "./question.routes.js";
 import { prisma } from "../config/prisma.js";
 import { streamPortalPdf } from "../services/pdf.service.js";
 
@@ -20,6 +21,7 @@ apiRoutes.use("/eligibility-rules", ruleRoutes);
 apiRoutes.use("/state", stateRoutes);
 apiRoutes.use("/candidate", candidateRoutes);
 apiRoutes.use("/hall-tickets", hallTicketRoutes);
+apiRoutes.use("/questions", questionRoutes);
 
 apiRoutes.get("/candidate-public/active-phase", async (req, res, next) => {
   try {
