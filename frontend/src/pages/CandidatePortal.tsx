@@ -148,7 +148,6 @@ export function CandidatePortal() {
           ? `Application ${application.applicationNo} saved in Neon database.`
           : `Application ${application.applicationNo} saved. Login with ${application.candidateLogin?.email ?? form.email} to open the candidate dashboard.`
       );
-      window.setTimeout(() => resetRegistrationForm(selectedExam.id), 800);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Registration could not be saved to database.");
     }

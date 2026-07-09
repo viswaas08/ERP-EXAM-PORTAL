@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import bcrypt from "bcryptjs";
 import { prisma } from "../config/prisma.js";
 import { authenticate, type AuthRequest } from "../middleware/auth.js";
@@ -156,7 +156,7 @@ candidateRoutes.post("/registration", authenticate, async (req: AuthRequest, res
   res.status(existing ? 200 : 201).json(fullApplication);
 });
 
-candidateRoutes.post("/public-registration", async (req, res) => {
+async function publicRegistrationHandler(req: Request, res: Response) {
   const email = String(req.body.email || "").toLowerCase();
   const password = String(req.body.password || "");
   if (!email || !password || password.length < 8) {
@@ -244,4 +244,7 @@ candidateRoutes.post("/public-registration", async (req, res) => {
     ...(await prisma.application.findUnique({ where: { id: application.id }, include: { examination: true, documents: true, history: true } })),
     candidateLogin: { email }
   });
-});
+}
+
+candidateRoutes.post("/public-registration", publicRegistrationHandler);
+candidateRoutes.post("/public-register", publicRegistrationHandler);
