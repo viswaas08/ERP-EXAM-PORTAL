@@ -11,6 +11,15 @@ export function EligibilityRules() {
   const [rules, setRules] = usePersistentState("examPortal.rules.items", ["Auto Approval", "Manual Queue"]);
   const [preview, setPreview] = usePersistentState("examPortal.rules.preview", ["318 Auto Approved", "122 Manual Verification", "34 Returned", "26 Rejected"]);
   const [notice, setNotice] = usePersistentState("examPortal.rules.notice", "Rules are ready for simulation.");
+  const [conditions, setConditions] = usePersistentState("examPortal.rules.conditions", [
+    { field: "Qualification", operator: "equals", value: "Bachelor's Degree", connector: "AND" },
+    { field: "Percentage", operator: "greater than or equal", value: "60", connector: "AND" },
+    { field: "Nationality", operator: "equals", value: "Indian", connector: "THEN Approve" }
+  ]);
+
+  function updateCondition(index: number, keyName: string, val: string) {
+    setConditions((current) => current.map((cond, i) => i === index ? { ...cond, [keyName]: val } : cond));
+  }
 
   function simulate() {
     setPreview(["342 Auto Approved", "101 Manual Verification", "39 Returned", "18 Rejected"]);
@@ -35,9 +44,22 @@ export function EligibilityRules() {
           <div className="rounded-md border border-border p-4">
             <div className="mb-3 flex items-center gap-2"><Badge>IF</Badge><Badge>Priority 1</Badge><Badge>Auto Approval</Badge></div>
             <div className="grid gap-3 md:grid-cols-4">
-              <Select>{fields.map((item) => <option key={item}>{item}</option>)}</Select><Select>{operators.map((item) => <option key={item}>{item}</option>)}</Select><Select>{values.map((item) => <option key={item}>{item}</option>)}</Select><Select>{connectors.map((item) => <option key={item}>{item}</option>)}</Select>
-              <Select>{fields.map((item) => <option key={item}>{item}</option>)}</Select><Select>{operators.map((item) => <option key={item}>{item}</option>)}</Select><Select>{values.map((item) => <option key={item}>{item}</option>)}</Select><Select>{connectors.map((item) => <option key={item}>{item}</option>)}</Select>
-              <Select>{fields.map((item) => <option key={item}>{item}</option>)}</Select><Select>{operators.map((item) => <option key={item}>{item}</option>)}</Select><Select>{values.map((item) => <option key={item}>{item}</option>)}</Select><Select>{connectors.map((item) => <option key={item}>{item}</option>)}</Select>
+              {conditions.map((cond, index) => (
+                <div className="contents" key={index}>
+                  <Select value={cond.field} onChange={(event) => updateCondition(index, "field", event.target.value)}>
+                    {fields.map((item) => <option key={item} value={item}>{item}</option>)}
+                  </Select>
+                  <Select value={cond.operator} onChange={(event) => updateCondition(index, "operator", event.target.value)}>
+                    {operators.map((item) => <option key={item} value={item}>{item}</option>)}
+                  </Select>
+                  <Select value={cond.value} onChange={(event) => updateCondition(index, "value", event.target.value)}>
+                    {values.map((item) => <option key={item} value={item}>{item}</option>)}
+                  </Select>
+                  <Select value={cond.connector} onChange={(event) => updateCondition(index, "connector", event.target.value)}>
+                    {connectors.map((item) => <option key={item} value={item}>{item}</option>)}
+                  </Select>
+                </div>
+              ))}
             </div>
           </div>
           <div className="rounded-md border border-border p-4">

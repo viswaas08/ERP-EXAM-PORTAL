@@ -8,6 +8,9 @@
     "build": "tsc",
     "start": "node dist/src/server.js",
     "seed": "tsx prisma/seed.ts",
+    "inspect": "tsx prisma/inspect.ts",
+    "clean-seed": "tsx prisma/clean-seed.ts",
+    "clean-settings": "tsx prisma/clean-systemsettings.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init"
   },

@@ -74,27 +74,41 @@ export const exams = [
 
 export const phases = ["Registration", "Correction Window", "Verification", "Hall Ticket Release", "Online Examination", "Result Publication"];
 
-export const applications: Array<{
-  id: string;
-  name: string;
-  exam: string;
-  category: string;
-  state: string;
-  score: number;
-  status: string;
-}> = [];
+export const applications = [
+  { id: "APP-2026-000101", name: "Amit Sharma", exam: "NRE-2026", category: "General", state: "Delhi", score: 85, status: "Approved" },
+  { id: "APP-2026-000102", name: "Priyanka Patel", exam: "NRE-2026", category: "OBC", state: "Gujarat", score: 72, status: "Pending" },
+  { id: "APP-2026-000103", name: "Vijay Kumar", exam: "SET-2026", category: "SC", state: "Tamil Nadu", score: 68, status: "Approved" },
+  { id: "APP-2026-000104", name: "Ananya Rao", exam: "TEC-2026", category: "General", state: "Karnataka", score: 91, status: "Pending" },
+  { id: "APP-2026-000105", name: "Rahul Singh", exam: "NRE-2026", category: "EWS", state: "Rajasthan", score: 79, status: "Rejected" }
+];
 
 export const formSections = [
   {
     title: "Personal Details",
-    fields: ["Full Name", "Email", "Phone", "Date of Birth", "Nationality"]
+    fields: [
+      { label: "Full Name", type: "Text", placeholder: "Enter your full name", helpText: "As per class 10 certificate", required: true, visible: true, editable: true, searchable: true, eligibility: false, unique: false },
+      { label: "Email", type: "Email", placeholder: "Enter email address", helpText: "For communications", required: true, visible: true, editable: true, searchable: true, eligibility: false, unique: true },
+      { label: "Phone", type: "Phone", placeholder: "Enter phone number", helpText: "10-digit mobile number", required: true, visible: true, editable: true, searchable: false, eligibility: false, unique: true },
+      { label: "Date of Birth", type: "Date", placeholder: "", helpText: "As per identity proof", required: true, visible: true, editable: true, searchable: false, eligibility: true, unique: false },
+      { label: "Nationality", type: "Dropdown", placeholder: "Select nationality", helpText: "", required: true, visible: true, editable: true, searchable: false, eligibility: true, unique: false }
+    ]
   },
   {
     title: "Education",
-    fields: ["Qualification", "University", "Percentage", "Passing Year"]
+    fields: [
+      { label: "Qualification", type: "Dropdown", placeholder: "Select highest qualification", helpText: "", required: true, visible: true, editable: true, searchable: false, eligibility: true, unique: false },
+      { label: "University", type: "Text", placeholder: "Enter board/university name", helpText: "", required: true, visible: true, editable: true, searchable: false, eligibility: false, unique: false },
+      { label: "Percentage", type: "Percentage", placeholder: "Enter aggregate percentage", helpText: "Minimum 60% for automatic approval", required: true, visible: true, editable: true, searchable: false, eligibility: true, unique: false },
+      { label: "Passing Year", type: "Number", placeholder: "YYYY", helpText: "", required: true, visible: true, editable: true, searchable: false, eligibility: false, unique: false }
+    ]
   },
   {
     title: "Documents",
-    fields: ["Photo", "Signature", "Identity Proof", "Degree Certificate"]
+    fields: [
+      { label: "Photo", type: "Image Upload", placeholder: "", helpText: "JPG/PNG up to 2MB", required: true, visible: true, editable: true, searchable: false, eligibility: false, unique: false },
+      { label: "Signature", type: "Image Upload", placeholder: "", helpText: "JPG/PNG up to 1MB", required: true, visible: true, editable: true, searchable: false, eligibility: false, unique: false },
+      { label: "Identity Proof", type: "File Upload", placeholder: "", helpText: "PDF up to 5MB", required: true, visible: true, editable: true, searchable: false, eligibility: false, unique: false },
+      { label: "Degree Certificate", type: "File Upload", placeholder: "", helpText: "PDF up to 5MB", required: true, visible: true, editable: true, searchable: false, eligibility: false, unique: false }
+    ]
   }
 ];

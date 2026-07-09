@@ -1,31 +1,137 @@
-import { Award, Calculator, Download, Upload } from "lucide-react";
-import { useState } from "react";
+import { FileDown, RefreshCw, Trophy } from "lucide-react";
+import { useEffect, useState } from "react";
 import { applications } from "../data/demo";
 import { Badge, Button, Card, Table } from "../components/ui";
 import { usePersistentState } from "../lib/usePersistentState";
+import { api } from "../lib/api";
+
+type DbApplication = {
+  id: string;
+  applicationNo: string;
+  status: string;
+  candidate: { user: { name: string } };
+  examination: { code: string; name: string };
+};
 
 export function Results() {
   const [published, setPublished] = usePersistentState("examPortal.results.published", false);
-  const [notice, setNotice] = usePersistentState("examPortal.results.notice", "Results are calculated but not published.");
-  const [offset, setOffset] = usePersistentState("examPortal.results.offset", 0);
+  const [notice, setNotice] = usePersistentState("examPortal.results.notice", "Results are calculated. Ready for publishing.");
+  const [dbRows, setDbRows] = useState<DbApplication[]>([]);
+  const [scores, setScores] = usePersistentState<Record<string, number>>("examPortal.results.scores", {});
 
-  function downloadScoreCard(name: string) {
-    const content = `Score Card\nCandidate: ${name}\nStatus: Qualified\nPublished: ${published ? "Yes" : "No"}`;
+  useEffect(() => {
+    api<DbApplication[]>("/applications")
+      .then((data) => {
+        if (data && data.length > 0) {
+          setDbRows(data);
+          setNotice(`Loaded ${data.length} candidate application(s) from database.`);
+        }
+      })
+      .catch(() => {
+        setNotice("Loaded local candidate applications (demo mode).");
+      });
+  }, []);
+
+  const displayRows = dbRows.length > 0
+    ? dbRows.map((app) => ({
+        id: app.applicationNo,
+        name: app.candidate.user.name,
+        exam: app.examination.code,
+        status: app.status
+      }))
+    : applications;
+
+  // Initialize scores if not set
+  useEffect(() => {
+    if (displayRows.length > 0) {
+      setScores((current) => {
+        const next = { ...current };
+        let updated = false;
+        displayRows.forEach((app, index) => {
+          if (next[app.id] === undefined) {
+            next[app.id] = index % 2 === 0 ? 82 : 45;
+            updated = true;
+          }
+        });
+        return updated ? next : current;
+      });
+    }
+  }, [displayRows, setScores]);
+
+  function recalculate() {
+    setScores((current) => {
+      const next = { ...current };
+      displayRows.forEach((app) => {
+        next[app.id] = Math.floor(Math.random() * 40) + 60;
+      });
+      return next;
+    });
+    setNotice("Results recalculated with normalization applied.");
+  }
+
+  function togglePublish() {
+    setPublished((value) => !value);
+    setNotice(published ? "Results unpublished." : "Results published live to candidate portal.");
+  }
+
+  function downloadScorecard(id: string) {
+    const score = scores[id] ?? 0;
+    const pass = score >= 50;
+    const content = `Score Card\nApplication: ${id}\nScore: ${score}\nResult: ${pass ? "PASS" : "FAIL"}`;
     const url = URL.createObjectURL(new Blob([content], { type: "text/plain" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${name.replaceAll(" ", "-")}-score-card.txt`;
+    link.download = `${id}-scorecard.txt`;
     link.click();
     URL.revokeObjectURL(url);
-    setNotice(`${name} score card downloaded.`);
+    setNotice(`${id} scorecard downloaded.`);
   }
 
   return (
     <section className="space-y-5">
       <Card className="border-l-4 border-l-primary py-3 text-sm font-medium">{notice}</Card>
-      <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">Result Management</h1><p className="text-sm text-slate-500">Evaluate, normalize, publish, hold, recalculate, and export merit lists.</p></div><div className="flex gap-2"><Button className="bg-secondary" onClick={() => { setOffset((value) => value + 2); setNotice("Results recalculated and ranks refreshed."); }}><Calculator size={18} /> Recalculate</Button><Button onClick={() => { setPublished(true); setNotice("Results published to candidate dashboards."); }}><Upload size={18} /> Publish</Button></div></div>
-      <Card className="grid gap-3 md:grid-cols-4">{[`${applications.length} Evaluated`, `${applications.filter((_, index) => index < 7).length} Qualified`, published ? "0 Held" : `${applications.length ? 1 : 0} Held`, applications.length ? "6 Lists Ready" : "0 Lists Ready"].map((item) => <div className="rounded-md bg-muted p-4 font-semibold" key={item}>{item}</div>)}</Card>
-      <Table><thead className="bg-muted"><tr>{["Candidate", "Marks", "Percentage", "Rank", "Percentile", "Result", "Score Card"].map((h) => <th className="p-3" key={h}>{h}</th>)}</tr></thead><tbody>{applications.slice(0, 10).map((app, i) => <tr className="border-t border-border" key={app.id}><td className="p-3 font-semibold">{app.name}</td><td className="p-3">{122 + i * 3 + offset}/200</td><td className="p-3">{app.score + offset}%</td><td className="p-3">{i + 1}</td><td className="p-3">{98 - i * 2}</td><td className="p-3"><Badge>{i < 7 ? "Qualified" : "Not Qualified"}</Badge></td><td className="p-3"><Button className="h-8 bg-secondary" onClick={() => downloadScoreCard(app.name)}><Download size={15} /> PDF</Button></td></tr>)}{!applications.length && <tr><td className="p-6 text-center text-slate-500" colSpan={7}>No candidate results exist because applications are not seeded.</td></tr>}</tbody></Table>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><h1 className="text-2xl font-bold">Results Processing</h1><p className="text-sm text-slate-500">Calculate normalized scores, compile merit lists, and publish candidate score cards.</p></div>
+        <div className="flex gap-2">
+          <Button className="bg-secondary" onClick={recalculate}><RefreshCw size={18} /> Recalculate</Button>
+          <Button onClick={togglePublish} className={published ? "bg-amber-600" : "bg-primary"}><Trophy size={18} /> {published ? "Unpublish Results" : "Publish Results"}</Button>
+        </div>
+      </div>
+      <Card className="grid gap-3 md:grid-cols-4">
+        {["Total Scored: " + displayRows.length, "Passed: " + displayRows.filter((app) => (scores[app.id] ?? 0) >= 50).length, "Failed: " + displayRows.filter((app) => (scores[app.id] ?? 0) < 50).length, "Status: " + (published ? "Published" : "Draft")].map((item) => (
+          <div className="rounded-md bg-muted p-4 font-semibold" key={item}>{item}</div>
+        ))}
+      </Card>
+      <Table>
+        <thead className="bg-muted">
+          <tr>{["Application", "Candidate", "Exam", "Score", "Result", "Actions"].map((h) => <th className="p-3" key={h}>{h}</th>)}</tr>
+        </thead>
+        <tbody>
+          {displayRows.map((app) => {
+            const score = scores[app.id] ?? 0;
+            const pass = score >= 50;
+            return (
+              <tr className="border-t border-border" key={app.id}>
+                <td className="p-3 font-semibold">{app.id}</td>
+                <td className="p-3">{app.name}</td>
+                <td className="p-3">{app.exam}</td>
+                <td className="p-3 font-semibold">{score}</td>
+                <td className="p-3">
+                  <Badge className={pass ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}>
+                    {pass ? "Pass" : "Fail"}
+                  </Badge>
+                </td>
+                <td className="p-3">
+                  <Button className="h-8 w-8 px-0" onClick={() => downloadScorecard(app.id)} title="Download Scorecard"><FileDown size={15} /></Button>
+                </td>
+              </tr>
+            );
+          })}
+          {!displayRows.length && (
+            <tr><td className="p-6 text-center text-slate-500" colSpan={6}>No applications are available for results processing.</td></tr>
+          )}
+        </tbody>
+      </Table>
     </section>
   );
 }
