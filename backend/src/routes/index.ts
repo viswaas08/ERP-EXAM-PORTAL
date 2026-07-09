@@ -4,6 +4,7 @@ import { examRoutes } from "./exam.routes.js";
 import { applicationRoutes } from "./application.routes.js";
 import { ruleRoutes } from "./rule.routes.js";
 import { dashboardRoutes } from "./dashboard.routes.js";
+import { stateRoutes } from "./state.routes.js";
 import { prisma } from "../config/prisma.js";
 import { streamPortalPdf } from "../services/pdf.service.js";
 
@@ -14,6 +15,7 @@ apiRoutes.use("/dashboard", dashboardRoutes);
 apiRoutes.use("/examinations", examRoutes);
 apiRoutes.use("/applications", applicationRoutes);
 apiRoutes.use("/eligibility-rules", ruleRoutes);
+apiRoutes.use("/state", stateRoutes);
 
 apiRoutes.get("/candidate/active-phase", async (req, res, next) => {
   try {

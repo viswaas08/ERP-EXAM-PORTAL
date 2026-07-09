@@ -37,6 +37,21 @@ type ApiExam = {
 const departments = ["", "Administrative Services", "Higher Education", "Public Works", "Health Services", "Police Recruitment", "Technical Education", "University Authority"];
 const statusOptions = ["", "Active", "Open", "Draft", "Archived", "Updated", "Closed"];
 
+function mapApiExam(exam: ApiExam): ExamRow {
+  const activePhase = exam.workflowPhases.find((phase) => phase.status === "OPEN") ?? exam.workflowPhases[0];
+  return {
+    id: exam.id,
+    code: exam.code,
+    name: exam.name,
+    department: exam.department,
+    phase: activePhase?.name ?? "Registration",
+    dates: activePhase ? `${new Date(activePhase.opensAt).toLocaleDateString()} - ${new Date(activePhase.closesAt).toLocaleDateString()}` : "Not scheduled",
+    applications: exam._count?.applications ?? 0,
+    status: exam.status,
+    workflowPhases: exam.workflowPhases
+  };
+}
+
 export function Examinations() {
   const [rows, setRows] = usePersistentState<ExamRow[]>("examPortal.examinations.rows", exams);
   const [search, setSearch] = usePersistentState("examPortal.examinations.search", "");
@@ -55,20 +70,7 @@ export function Examinations() {
 
     api<ApiExam[]>("/examinations")
       .then((data) => {
-        const mapped = data.map((exam) => {
-          const activePhase = exam.workflowPhases.find((phase) => phase.status === "OPEN") ?? exam.workflowPhases[0];
-          return {
-            id: exam.id,
-            code: exam.code,
-            name: exam.name,
-            department: exam.department,
-            phase: activePhase?.name ?? "Registration",
-            dates: activePhase ? `${new Date(activePhase.opensAt).toLocaleDateString()} - ${new Date(activePhase.closesAt).toLocaleDateString()}` : "Not scheduled",
-            applications: exam._count?.applications ?? 0,
-            status: exam.status,
-            workflowPhases: exam.workflowPhases
-          };
-        });
+        const mapped = data.map(mapApiExam);
         if (mapped.length) {
           setRows(mapped);
           setSelectedCode(mapped[0].code);
@@ -86,7 +88,7 @@ export function Examinations() {
     return textMatch && departmentMatch && statusMatch;
   }), [rows, search, department, status]);
 
-  function createExam() {
+  async function createExam() {
     const next = {
       code: `NEW-${String(rows.length + 1).padStart(3, "0")}`,
       name: "New Configurable Examination",
@@ -96,6 +98,32 @@ export function Examinations() {
       applications: 0,
       status: "Draft"
     };
+
+    try {
+      const created = await api<ApiExam>("/examinations", {
+        method: "POST",
+        body: JSON.stringify({
+          name: next.name,
+          code: next.code,
+          department: next.department,
+          durationMinutes: 120,
+          maximumMarks: 200,
+          passingMarks: 80,
+          negativeMarking: false,
+          languages: ["English", "Hindi"]
+        })
+      });
+      const mapped = mapApiExam(created);
+      setRows((current) => [mapped, ...current]);
+      setSelectedCode(mapped.code);
+      setSelectedExamId(mapped.id);
+      setHasLocalChanges(true);
+      setNotice(`${mapped.code} created in Neon database.`);
+      return;
+    } catch {
+      setNotice("API create failed, saved the draft in ERP database state instead.");
+    }
+
     setRows((current) => [next, ...current]);
     setHasLocalChanges(true);
     setSelectedCode(next.code);
@@ -118,16 +146,47 @@ export function Examinations() {
     setNotice(`${phase.name} activated and saved to the database. Candidate pages now use this phase.`);
   }
 
-  function editExam(code: string) {
+  async function editExam(code: string) {
+    const source = rows.find((exam) => exam.code === code);
+    if (source?.id) {
+      try {
+        const updated = await api<ApiExam>(`/examinations/${source.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "UPDATED" })
+        });
+        const mapped = mapApiExam(updated);
+        setRows((current) => current.map((exam) => exam.id === mapped.id ? mapped : exam));
+        setSelectedCode(mapped.code);
+        setHasLocalChanges(true);
+        setNotice(`${mapped.code} updated in Neon database.`);
+        return;
+      } catch {
+        setNotice("API update failed, saved the edit in ERP database state instead.");
+      }
+    }
     setRows((current) => current.map((exam) => exam.code === code ? { ...exam, phase: "Correction Window", status: "Updated" } : exam));
     setHasLocalChanges(true);
     setSelectedCode(code);
     setNotice(`${code} moved to Correction Window and marked Updated.`);
   }
 
-  function cloneExam(code: string) {
+  async function cloneExam(code: string) {
     const source = rows.find((exam) => exam.code === code);
     if (!source) return;
+    if (source.id) {
+      try {
+        const created = await api<ApiExam>(`/examinations/${source.id}/clone`, { method: "POST" });
+        const mapped = mapApiExam(created);
+        setRows((current) => [mapped, ...current]);
+        setSelectedCode(mapped.code);
+        setSelectedExamId(mapped.id);
+        setHasLocalChanges(true);
+        setNotice(`${source.code} cloned in Neon as ${mapped.code}.`);
+        return;
+      } catch {
+        setNotice("API clone failed, saved the clone in ERP database state instead.");
+      }
+    }
     const clone = { ...source, code: `${source.code}-CLONE`, name: `${source.name} Copy`, status: "Draft", applications: 0 };
     setRows((current) => [clone, ...current]);
     setHasLocalChanges(true);
@@ -135,7 +194,20 @@ export function Examinations() {
     setNotice(`${source.code} cloned into ${clone.code}.`);
   }
 
-  function deleteExam(code: string) {
+  async function deleteExam(code: string) {
+    const source = rows.find((exam) => exam.code === code);
+    if (source?.id) {
+      try {
+        const archived = await api<ApiExam>(`/examinations/${source.id}`, { method: "DELETE" });
+        const mapped = mapApiExam(archived);
+        setRows((current) => current.map((exam) => exam.id === mapped.id ? mapped : exam));
+        setHasLocalChanges(true);
+        setNotice(`${mapped.code} archived in Neon database.`);
+        return;
+      } catch {
+        setNotice("API archive failed, archived the row in ERP database state instead.");
+      }
+    }
     setRows((current) => current.filter((exam) => exam.code !== code));
     setHasLocalChanges(true);
     setNotice(`${code} archived from the active list.`);

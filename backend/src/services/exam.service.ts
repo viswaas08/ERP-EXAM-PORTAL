@@ -13,7 +13,34 @@ export function listExams(query: { search?: string; status?: string }) {
 }
 
 export function createExam(data: any) {
-  return prisma.examination.create({ data });
+  const now = new Date();
+  return prisma.examination.create({
+    data: {
+      ...data,
+      status: data.status ?? "DRAFT",
+      workflowPhases: {
+        create: ["Registration", "Correction Window", "Document Verification", "Eligibility Verification", "Hall Ticket Release", "Online Examination", "Result Publication", "Archive"].map((name, index) => ({
+          name,
+          status: index === 0 ? "OPEN" : "SCHEDULED",
+          opensAt: new Date(now.getTime() + index * 24 * 60 * 60 * 1000),
+          closesAt: new Date(now.getTime() + (index + 1) * 24 * 60 * 60 * 1000)
+        }))
+      }
+    },
+    include: { workflowPhases: true, _count: { select: { applications: true } } }
+  });
+}
+
+export function updateExam(id: string, data: { name?: string; department?: string; status?: string }) {
+  return prisma.examination.update({
+    where: { id },
+    data,
+    include: { workflowPhases: true, _count: { select: { applications: true } } }
+  });
+}
+
+export function archiveExam(id: string) {
+  return updateExam(id, { status: "ARCHIVED" });
 }
 
 export async function cloneExam(id: string) {
@@ -31,7 +58,8 @@ export async function cloneExam(id: string) {
       languages: exam.languages,
       status: "DRAFT",
       workflowPhases: { create: exam.workflowPhases.map((phase) => ({ name: phase.name, status: "SCHEDULED", opensAt: phase.opensAt, closesAt: phase.closesAt })) }
-    }
+    },
+    include: { workflowPhases: true, _count: { select: { applications: true } } }
   });
 }
 

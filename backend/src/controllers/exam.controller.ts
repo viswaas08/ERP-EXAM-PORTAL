@@ -10,6 +10,14 @@ export async function create(req: Request, res: Response) {
   res.status(201).json(await examService.createExam(examSchema.parse(req.body)));
 }
 
+export async function update(req: Request, res: Response) {
+  res.json(await examService.updateExam(String(req.params.id), req.body));
+}
+
+export async function archive(req: Request, res: Response) {
+  res.json(await examService.archiveExam(String(req.params.id)));
+}
+
 export async function clone(req: Request, res: Response) {
   res.status(201).json(await examService.cloneExam(String(req.params.id)));
 }

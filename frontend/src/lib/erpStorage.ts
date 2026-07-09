@@ -1,3 +1,5 @@
+import { saveStateToDatabase } from "./stateApi";
+
 export type StoredApplication = {
   id: string;
   name: string;
@@ -32,11 +34,13 @@ export function upsertStoredApplication(application: StoredApplication) {
     ? current.map((item) => (item.id === application.id ? application : item))
     : [application, ...current];
   localStorage.setItem(applicationsKey, JSON.stringify(next));
+  void saveStateToDatabase(applicationsKey, next).catch(() => undefined);
   return next;
 }
 
 export function setStoredApplicationStatus(id: string, status: string) {
   const next = getStoredApplications().map((item) => (item.id === id ? { ...item, status } : item));
   localStorage.setItem(applicationsKey, JSON.stringify(next));
+  void saveStateToDatabase(applicationsKey, next).catch(() => undefined);
   return next;
 }
