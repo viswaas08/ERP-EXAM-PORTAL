@@ -1,6 +1,7 @@
 import { Image, Plus, Shuffle } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, Card, Input, Select, Table } from "../components/ui";
+import { usePersistentState } from "../lib/usePersistentState";
 
 const questions = ["Constitutional provisions are amended by which article?", "Find the next number in the sequence.", "Evaluate the numerical expression.", "Identify the correct network topology."];
 const subjects = ["All Subjects", "General Studies", "Aptitude", "Mathematics", "Computer", "English", "Reasoning", "Current Affairs", "Domain Knowledge"];
@@ -8,9 +9,9 @@ const difficulties = ["All Difficulties", "Easy", "Medium", "Hard", "Expert"];
 const questionTypes = ["All Types", "MCQ", "Multiple Select", "Numerical", "True False", "Image Question", "Comprehension", "Assertion Reason"];
 
 export function QuestionBank() {
-  const [rows, setRows] = useState(questions);
-  const [notice, setNotice] = useState("Question bank ready.");
-  const [paperCount, setPaperCount] = useState(0);
+  const [rows, setRows] = usePersistentState("examPortal.questions.rows", questions);
+  const [notice, setNotice] = usePersistentState("examPortal.questions.notice", "Question bank ready.");
+  const [paperCount, setPaperCount] = usePersistentState("examPortal.questions.paperCount", 0);
 
   function addQuestion() {
     const next = `New sample question ${rows.length + 1}?`;

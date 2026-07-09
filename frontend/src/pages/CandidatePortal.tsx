@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Button, Card, Input, Select } from "../components/ui";
 import { fallbackPhase, getCandidatePhase, type CandidatePhaseSnapshot } from "../lib/workflow";
+import { usePersistentState } from "../lib/usePersistentState";
 
 const steps = ["Personal Details", "Address", "Education", "Experience", "Preferences", "Documents", "Preview", "Submit"];
 const nationalities = ["Indian", "Nepalese", "Bhutanese", "OCI", "Other"];
@@ -15,12 +16,12 @@ const centres = ["Pune Digital Campus", "Delhi North CBT Lab", "Bengaluru South 
 export function CandidatePortal() {
   const { isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
-  const [activeStep, setActiveStep] = useState(0);
-  const [submitted, setSubmitted] = useState(false);
-  const [uploadedDocs, setUploadedDocs] = useState<string[]>([]);
-  const [notice, setNotice] = useState("Complete each step and preview before final submission.");
+  const [activeStep, setActiveStep] = usePersistentState("examPortal.candidateRegistration.activeStep", 0);
+  const [submitted, setSubmitted] = usePersistentState("examPortal.candidateRegistration.submitted", false);
+  const [uploadedDocs, setUploadedDocs] = usePersistentState<string[]>("examPortal.candidateRegistration.uploadedDocs", []);
+  const [notice, setNotice] = usePersistentState("examPortal.candidateRegistration.notice", "Complete each step and preview before final submission.");
   const [phase, setPhase] = useState<CandidatePhaseSnapshot>(fallbackPhase);
-  const [form, setForm] = useState({
+  const [form, setForm] = usePersistentState("examPortal.candidateRegistration.form", {
     name: "Demo Candidate",
     email: "candidate@exam.gov",
     phone: "9876543210",

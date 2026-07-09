@@ -1,14 +1,15 @@
 import { Save } from "lucide-react";
 import { useState } from "react";
 import { Button, Card, Input, Select } from "../components/ui";
+import { usePersistentState } from "../lib/usePersistentState";
 const themeOptions = ["Light and Dark Mode", "Light Mode Only", "Dark Mode Only", "Auto System Theme", "High Contrast"];
 const popupOptions = ["Enable popup notices", "Disable popup notices", "Only high priority notices", "Banner only", "Dashboard only"];
 const retentionOptions = ["Retain 7 days", "Retain 30 days", "Retain 90 days", "Retain 180 days", "Retain 1 year"];
 
 export function Settings() {
-  const [notice, setNotice] = useState("System settings are loaded.");
-  const [org, setOrg] = useState("National Examination Authority");
-  const [portal, setPortal] = useState("Centralized Competitive Examination Portal");
+  const [notice, setNotice] = usePersistentState("examPortal.settings.notice", "System settings are loaded.");
+  const [org, setOrg] = usePersistentState("examPortal.settings.org", "National Examination Authority");
+  const [portal, setPortal] = usePersistentState("examPortal.settings.portal", "Centralized Competitive Examination Portal");
 
   return (
     <section className="space-y-5">

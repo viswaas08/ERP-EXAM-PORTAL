@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Button, Card } from "../components/ui";
 import { fallbackPhase, getCandidatePhase, type CandidatePhaseSnapshot } from "../lib/workflow";
+import { usePersistentState } from "../lib/usePersistentState";
 
 const numbers = Array.from({ length: 30 }, (_, i) => i + 1);
 const options = ["Election Commission", "Union Public Service Commission", "Finance Commission", "Planning Commission"];
@@ -11,11 +12,11 @@ const options = ["Election Commission", "Union Public Service Commission", "Fina
 export function OnlineExam() {
   const { logout } = useAuth();
   const navigate = useNavigate();
-  const [current, setCurrent] = useState(12);
-  const [answers, setAnswers] = useState<Record<number, string>>({ 12: "Union Public Service Commission" });
-  const [marked, setMarked] = useState<number[]>([5, 9]);
-  const [submitted, setSubmitted] = useState(false);
-  const [notice, setNotice] = useState("Question 12 auto-saved just now.");
+  const [current, setCurrent] = usePersistentState("examPortal.onlineExam.current", 12);
+  const [answers, setAnswers] = usePersistentState<Record<number, string>>("examPortal.onlineExam.answers", { 12: "Union Public Service Commission" });
+  const [marked, setMarked] = usePersistentState<number[]>("examPortal.onlineExam.marked", [5, 9]);
+  const [submitted, setSubmitted] = usePersistentState("examPortal.onlineExam.submitted", false);
+  const [notice, setNotice] = usePersistentState("examPortal.onlineExam.notice", "Question 12 auto-saved just now.");
   const [phase, setPhase] = useState<CandidatePhaseSnapshot>(fallbackPhase);
 
   const attempted = useMemo(() => Object.keys(answers).length, [answers]);

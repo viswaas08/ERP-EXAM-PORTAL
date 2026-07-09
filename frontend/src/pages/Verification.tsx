@@ -1,13 +1,14 @@
 import { Check, Download, Search, X } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, Card } from "../components/ui";
+import { usePersistentState } from "../lib/usePersistentState";
 
 const docs = ["Passport Photo", "Signature", "Identity Proof", "Degree Certificate", "Category Certificate", "Experience Certificate"];
 
 export function Verification() {
-  const [statuses, setStatuses] = useState<Record<string, string>>(() => Object.fromEntries(docs.map((doc, index) => [doc, index % 3 === 0 ? "Pending" : "Verified"])));
-  const [previewDoc, setPreviewDoc] = useState("Passport Photo");
-  const [notice, setNotice] = useState("Open a document preview, then approve or reject it.");
+  const [statuses, setStatuses] = usePersistentState<Record<string, string>>("examPortal.verification.statuses", Object.fromEntries(docs.map((doc, index) => [doc, index % 3 === 0 ? "Pending" : "Verified"])));
+  const [previewDoc, setPreviewDoc] = usePersistentState("examPortal.verification.previewDoc", "Passport Photo");
+  const [notice, setNotice] = usePersistentState("examPortal.verification.notice", "Open a document preview, then approve or reject it.");
 
   function updateStatus(doc: string, status: string) {
     setStatuses((current) => ({ ...current, [doc]: status }));

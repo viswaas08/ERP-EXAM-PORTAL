@@ -2,13 +2,14 @@ import { GripVertical, Plus } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, Card, Input, Select } from "../components/ui";
 import { formSections } from "../data/demo";
+import { usePersistentState } from "../lib/usePersistentState";
 
 const types = ["Text", "Textarea", "Email", "Password", "Number", "Date", "Dropdown", "Radio", "Checkbox", "Multi Select", "File Upload", "Image Upload", "Percentage", "CGPA", "Phone", "Address", "State", "District", "Pincode", "Aadhaar Masked", "PAN", "Experience Years", "Declaration"];
 
 export function FormBuilder() {
-  const [sections, setSections] = useState(formSections);
-  const [fieldLabel, setFieldLabel] = useState("Percentage");
-  const [notice, setNotice] = useState("Click any field to load it into the properties panel.");
+  const [sections, setSections] = usePersistentState("examPortal.formBuilder.sections", formSections);
+  const [fieldLabel, setFieldLabel] = usePersistentState("examPortal.formBuilder.fieldLabel", "Percentage");
+  const [notice, setNotice] = usePersistentState("examPortal.formBuilder.notice", "Click any field to load it into the properties panel.");
 
   function addSection() {
     const next = { title: `Custom Section ${sections.length + 1}`, fields: ["New Field"] };

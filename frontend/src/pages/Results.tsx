@@ -2,11 +2,12 @@ import { Award, Calculator, Download, Upload } from "lucide-react";
 import { useState } from "react";
 import { applications } from "../data/demo";
 import { Badge, Button, Card, Table } from "../components/ui";
+import { usePersistentState } from "../lib/usePersistentState";
 
 export function Results() {
-  const [published, setPublished] = useState(false);
-  const [notice, setNotice] = useState("Results are calculated but not published.");
-  const [offset, setOffset] = useState(0);
+  const [published, setPublished] = usePersistentState("examPortal.results.published", false);
+  const [notice, setNotice] = usePersistentState("examPortal.results.notice", "Results are calculated but not published.");
+  const [offset, setOffset] = usePersistentState("examPortal.results.offset", 0);
 
   function downloadScoreCard(name: string) {
     const content = `Score Card\nCandidate: ${name}\nStatus: Qualified\nPublished: ${published ? "Yes" : "No"}`;

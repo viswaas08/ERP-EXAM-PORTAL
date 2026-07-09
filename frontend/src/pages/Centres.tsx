@@ -1,16 +1,17 @@
 import { MapPin, Shuffle } from "lucide-react";
 import { useState } from "react";
 import { Button, Card, Input, Select, Table } from "../components/ui";
+import { usePersistentState } from "../lib/usePersistentState";
 
 const centres = ["Delhi North CBT Lab", "Pune Digital Campus", "Bengaluru South Centre", "Chennai Knowledge Park", "Jaipur Public School"];
 const stateOptions = ["", "Andhra Pradesh", "Delhi", "Gujarat", "Karnataka", "Kerala", "Maharashtra", "Rajasthan", "Tamil Nadu", "Telangana", "Uttar Pradesh", "West Bengal"];
 
 export function Centres() {
-  const [rows, setRows] = useState(centres.map((name, i) => ({ name, city: ["Delhi", "Pune", "Bengaluru", "Chennai", "Jaipur"][i], state: ["Delhi", "Maharashtra", "Karnataka", "Tamil Nadu", "Rajasthan"][i], capacity: 250 + i * 70, systems: 220 + i * 65, allocated: 160 + i * 38 })));
-  const [name, setName] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [notice, setNotice] = useState("Centre allocation is ready.");
+  const [rows, setRows] = usePersistentState("examPortal.centres.rows", centres.map((name, i) => ({ name, city: ["Delhi", "Pune", "Bengaluru", "Chennai", "Jaipur"][i], state: ["Delhi", "Maharashtra", "Karnataka", "Tamil Nadu", "Rajasthan"][i], capacity: 250 + i * 70, systems: 220 + i * 65, allocated: 160 + i * 38 })));
+  const [name, setName] = usePersistentState("examPortal.centres.name", "");
+  const [city, setCity] = usePersistentState("examPortal.centres.city", "");
+  const [state, setState] = usePersistentState("examPortal.centres.state", "");
+  const [notice, setNotice] = usePersistentState("examPortal.centres.notice", "Centre allocation is ready.");
 
   function createCentre() {
     const next = { name: name || `New CBT Centre ${rows.length + 1}`, city: city || "New City", state: state || "New State", capacity: 240, systems: 220, allocated: 0 };

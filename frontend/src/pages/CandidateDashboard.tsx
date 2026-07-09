@@ -4,15 +4,16 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Badge, Button, Card } from "../components/ui";
 import { fallbackPhase, getCandidatePhase, type CandidatePhaseSnapshot } from "../lib/workflow";
+import { usePersistentState } from "../lib/usePersistentState";
 
 const timeline = ["Submitted", "Verification", "Approved", "Hall Ticket Released", "Examination", "Evaluation", "Result Published"];
 
 export function CandidateDashboard() {
   const { logout } = useAuth();
   const navigate = useNavigate();
-  const [notice, setNotice] = useState("Welcome back. Hall ticket is ready for download.");
-  const [resultVisible, setResultVisible] = useState(false);
-  const [timelineIndex, setTimelineIndex] = useState(3);
+  const [notice, setNotice] = usePersistentState("examPortal.candidateDashboard.notice", "Welcome back. Hall ticket is ready for download.");
+  const [resultVisible, setResultVisible] = usePersistentState("examPortal.candidateDashboard.resultVisible", false);
+  const [timelineIndex, setTimelineIndex] = usePersistentState("examPortal.candidateDashboard.timelineIndex", 3);
   const [phase, setPhase] = useState<CandidatePhaseSnapshot>(fallbackPhase);
 
   useEffect(() => {

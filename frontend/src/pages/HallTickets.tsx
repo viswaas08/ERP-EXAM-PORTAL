@@ -2,11 +2,12 @@ import { FileDown, QrCode, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { applications } from "../data/demo";
 import { Badge, Button, Card, Table } from "../components/ui";
+import { usePersistentState } from "../lib/usePersistentState";
 
 export function HallTickets() {
-  const [generated, setGenerated] = useState(500);
-  const [notice, setNotice] = useState("Hall ticket batch is ready.");
-  const [regenerated, setRegenerated] = useState<string[]>([]);
+  const [generated, setGenerated] = usePersistentState("examPortal.hallTickets.generated", 500);
+  const [notice, setNotice] = usePersistentState("examPortal.hallTickets.notice", "Hall ticket batch is ready.");
+  const [regenerated, setRegenerated] = usePersistentState<string[]>("examPortal.hallTickets.regenerated", []);
 
   function bulkGenerate() {
     setGenerated((value) => value + 18);

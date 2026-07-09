@@ -1,15 +1,16 @@
 import { Play, Plus } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, Card, Select } from "../components/ui";
+import { usePersistentState } from "../lib/usePersistentState";
 const fields = ["Qualification", "Percentage", "Age", "Nationality", "Category", "Documents Verified", "Experience Years", "State", "Application Status"];
 const operators = ["equals", "not equals", "greater than", "greater than or equal", "less than", "less than or equal", "contains", "is empty", "is not empty"];
 const values = ["Bachelor's Degree", "B.Tech", "60", "70", "30", "Indian", "General", "OBC", "Yes", "No", "Pending", "Approved"];
 const connectors = ["AND", "OR", "NOT", "THEN Approve", "THEN Reject", "THEN Manual Queue", "THEN Return For Correction"];
 
 export function EligibilityRules() {
-  const [rules, setRules] = useState(["Auto Approval", "Manual Queue"]);
-  const [preview, setPreview] = useState(["318 Auto Approved", "122 Manual Verification", "34 Returned", "26 Rejected"]);
-  const [notice, setNotice] = useState("Rules are ready for simulation.");
+  const [rules, setRules] = usePersistentState("examPortal.rules.items", ["Auto Approval", "Manual Queue"]);
+  const [preview, setPreview] = usePersistentState("examPortal.rules.preview", ["318 Auto Approved", "122 Manual Verification", "34 Returned", "26 Rejected"]);
+  const [notice, setNotice] = usePersistentState("examPortal.rules.notice", "Rules are ready for simulation.");
 
   function simulate() {
     setPreview(["342 Auto Approved", "101 Manual Verification", "39 Returned", "18 Rejected"]);

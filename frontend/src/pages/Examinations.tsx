@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, Input, Select, Table } from "../components/ui";
 import { exams, phases } from "../data/demo";
 import { api } from "../lib/api";
+import { usePersistentState } from "../lib/usePersistentState";
 
 type WorkflowPhase = {
   id: string;
@@ -37,13 +38,13 @@ const departments = ["", "Administrative Services", "Higher Education", "Public 
 const statusOptions = ["", "Active", "Open", "Draft", "Archived", "Updated", "Closed"];
 
 export function Examinations() {
-  const [rows, setRows] = useState<ExamRow[]>(exams);
-  const [search, setSearch] = useState("");
-  const [department, setDepartment] = useState("");
-  const [status, setStatus] = useState("");
-  const [notice, setNotice] = useState("Ready to manage examinations.");
-  const [selectedCode, setSelectedCode] = useState(rows[0]?.code ?? "");
-  const [selectedExamId, setSelectedExamId] = useState<string | undefined>();
+  const [rows, setRows] = usePersistentState<ExamRow[]>("examPortal.examinations.rows", exams);
+  const [search, setSearch] = usePersistentState("examPortal.examinations.search", "");
+  const [department, setDepartment] = usePersistentState("examPortal.examinations.department", "");
+  const [status, setStatus] = usePersistentState("examPortal.examinations.status", "");
+  const [notice, setNotice] = usePersistentState("examPortal.examinations.notice", "Ready to manage examinations.");
+  const [selectedCode, setSelectedCode] = usePersistentState("examPortal.examinations.selectedCode", rows[0]?.code ?? "");
+  const [selectedExamId, setSelectedExamId] = usePersistentState<string | undefined>("examPortal.examinations.selectedExamId", undefined);
 
   useEffect(() => {
     api<ApiExam[]>("/examinations")
