@@ -12,6 +12,10 @@ export function QuestionBank() {
   const [rows, setRows] = usePersistentState("examPortal.questions.rows", questions);
   const [notice, setNotice] = usePersistentState("examPortal.questions.notice", "Question bank ready.");
   const [paperCount, setPaperCount] = usePersistentState("examPortal.questions.paperCount", 0);
+  const [search, setSearch] = usePersistentState("examPortal.questions.search", "");
+  const [subject, setSubject] = usePersistentState("examPortal.questions.subject", "All Subjects");
+  const [difficulty, setDifficulty] = usePersistentState("examPortal.questions.difficulty", "All Difficulties");
+  const [questionType, setQuestionType] = usePersistentState("examPortal.questions.type", "All Types");
 
   function addQuestion() {
     const next = `New sample question ${rows.length + 1}?`;
@@ -28,7 +32,7 @@ export function QuestionBank() {
     <section className="space-y-5">
       <Card className="border-l-4 border-l-primary py-3 text-sm font-medium">{notice}</Card>
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">Question Bank</h1><p className="text-sm text-slate-500">Subjects, topics, difficulty levels, question types, explanations, and random paper generation.</p></div><div className="flex gap-2"><Button className="bg-secondary" onClick={generatePaper}><Shuffle size={18} /> Generate Paper</Button><Button onClick={addQuestion}><Plus size={18} /> Add Question</Button></div></div>
-      <Card className="grid gap-3 md:grid-cols-4"><Input placeholder="Search question" /><Select>{subjects.map((item) => <option key={item}>{item}</option>)}</Select><Select>{difficulties.map((item) => <option key={item}>{item}</option>)}</Select><Select>{questionTypes.map((item) => <option key={item}>{item}</option>)}</Select></Card>
+      <Card className="grid gap-3 md:grid-cols-4"><Input placeholder="Search question" value={search} onChange={(event) => setSearch(event.target.value)} /><Select value={subject} onChange={(event) => setSubject(event.target.value)}>{subjects.map((item) => <option key={item}>{item}</option>)}</Select><Select value={difficulty} onChange={(event) => setDifficulty(event.target.value)}>{difficulties.map((item) => <option key={item}>{item}</option>)}</Select><Select value={questionType} onChange={(event) => setQuestionType(event.target.value)}>{questionTypes.map((item) => <option key={item}>{item}</option>)}</Select></Card>
       <Table><thead className="bg-muted"><tr>{["Question", "Subject", "Topic", "Type", "Difficulty", "Marks", "Negative", "Tags"].map((h) => <th className="p-3" key={h}>{h}</th>)}</tr></thead><tbody>{rows.map((q, i) => <tr className="border-t border-border" key={q}><td className="p-3 font-medium">{q} {i === 3 && <Image className="inline" size={15} />}</td><td className="p-3">{["General Studies", "Aptitude", "Mathematics", "Computer"][i % 4]}</td><td className="p-3">Topic {(i % 4) + 1}</td><td className="p-3"><Badge>{["MCQ", "Numerical", "True False", "Image"][i % 4]}</Badge></td><td className="p-3">{["Easy", "Medium", "Hard", "Medium"][i % 4]}</td><td className="p-3">2</td><td className="p-3">0.5</td><td className="p-3">Recruitment</td></tr>)}</tbody></Table>
     </section>
   );

@@ -26,9 +26,16 @@ export function CandidatePortal() {
     name: "Demo Candidate",
     email: "candidate@exam.gov",
     phone: "9876543210",
+    dateOfBirth: "",
+    nationality: "Indian",
+    category: "General",
+    qualification: "Bachelor's Degree",
     university: "State University",
     percentage: "72",
-    year: "2025"
+    year: "2025",
+    exam: "National Recruitment Examination",
+    centre: "Pune Digital Campus",
+    experience: ""
   });
 
   useEffect(() => {
@@ -68,8 +75,8 @@ export function CandidatePortal() {
     upsertStoredApplication({
       id: "APP-2026-000501",
       name: form.name,
-      exam: "NRE-2026",
-      category: "General",
+      exam: form.exam.includes("National") ? "NRE-2026" : form.exam,
+      category: form.category,
       state: "Maharashtra",
       score: Number(form.percentage) || 0,
       status: "Pending"
@@ -107,12 +114,12 @@ export function CandidatePortal() {
         <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
           <Card className="space-y-4">
             <h2 className="font-semibold">{steps[activeStep]}</h2>
-            {activeStep <= 1 && <div className="grid gap-3 md:grid-cols-2"><Input placeholder="Full name" value={form.name} onChange={(event) => updateField("name", event.target.value)} /><Input placeholder="Email" value={form.email} onChange={(event) => updateField("email", event.target.value)} /><Input placeholder="Phone" value={form.phone} onChange={(event) => updateField("phone", event.target.value)} /><Input type="date" /><Select>{nationalities.map((item) => <option key={item}>{item}</option>)}</Select><Select>{categories.map((item) => <option key={item}>{item}</option>)}</Select></div>}
-            {activeStep === 2 && <div className="grid gap-3 md:grid-cols-2"><Select>{qualifications.map((item) => <option key={item}>{item}</option>)}</Select><Input placeholder="University" value={form.university} onChange={(event) => updateField("university", event.target.value)} /><Input placeholder="Percentage" value={form.percentage} onChange={(event) => updateField("percentage", event.target.value)} /><Input placeholder="Passing year" value={form.year} onChange={(event) => updateField("year", event.target.value)} /></div>}
-            {activeStep === 3 && <textarea className="min-h-28 w-full rounded-md border border-border bg-background p-3 text-sm" placeholder="Experience details, if any" />}
-            {activeStep === 4 && <div className="grid gap-3 md:grid-cols-2"><Select>{exams.map((item) => <option key={item}>{item}</option>)}</Select><Select>{centres.map((item) => <option key={item}>{item}</option>)}</Select></div>}
+            {activeStep <= 1 && <div className="grid gap-3 md:grid-cols-2"><Input placeholder="Full name" value={form.name} onChange={(event) => updateField("name", event.target.value)} /><Input placeholder="Email" value={form.email} onChange={(event) => updateField("email", event.target.value)} /><Input placeholder="Phone" value={form.phone} onChange={(event) => updateField("phone", event.target.value)} /><Input type="date" value={form.dateOfBirth} onChange={(event) => updateField("dateOfBirth", event.target.value)} /><Select value={form.nationality} onChange={(event) => updateField("nationality", event.target.value)}>{nationalities.map((item) => <option key={item}>{item}</option>)}</Select><Select value={form.category} onChange={(event) => updateField("category", event.target.value)}>{categories.map((item) => <option key={item}>{item}</option>)}</Select></div>}
+            {activeStep === 2 && <div className="grid gap-3 md:grid-cols-2"><Select value={form.qualification} onChange={(event) => updateField("qualification", event.target.value)}>{qualifications.map((item) => <option key={item}>{item}</option>)}</Select><Input placeholder="University" value={form.university} onChange={(event) => updateField("university", event.target.value)} /><Input placeholder="Percentage" value={form.percentage} onChange={(event) => updateField("percentage", event.target.value)} /><Input placeholder="Passing year" value={form.year} onChange={(event) => updateField("year", event.target.value)} /></div>}
+            {activeStep === 3 && <textarea className="min-h-28 w-full rounded-md border border-border bg-background p-3 text-sm" placeholder="Experience details, if any" value={form.experience} onChange={(event) => updateField("experience", event.target.value)} />}
+            {activeStep === 4 && <div className="grid gap-3 md:grid-cols-2"><Select value={form.exam} onChange={(event) => updateField("exam", event.target.value)}>{exams.map((item) => <option key={item}>{item}</option>)}</Select><Select value={form.centre} onChange={(event) => updateField("centre", event.target.value)}>{centres.map((item) => <option key={item}>{item}</option>)}</Select></div>}
             {activeStep === 5 && <div className="grid gap-3 md:grid-cols-3">{["Photo", "Signature", "Degree Certificate"].map((item) => <button className={`grid h-28 place-items-center rounded-md border border-dashed border-border text-sm ${uploadedDocs.includes(item) ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950" : ""}`} key={item} onClick={() => uploadDoc(item)}><Upload size={20} />{uploadedDocs.includes(item) ? `${item} Uploaded` : item}</button>)}</div>}
-            {activeStep >= 6 && <div className="rounded-md bg-muted p-4 text-sm"><p><strong>Name:</strong> {form.name}</p><p><strong>Email:</strong> {form.email}</p><p><strong>Education:</strong> Bachelor's Degree, {form.percentage}%</p><p><strong>Documents:</strong> {uploadedDocs.length}/3 uploaded</p><p><strong>Status:</strong> {submitted ? "Submitted" : "Ready for final submission"}</p></div>}
+            {activeStep >= 6 && <div className="rounded-md bg-muted p-4 text-sm"><p><strong>Name:</strong> {form.name}</p><p><strong>Email:</strong> {form.email}</p><p><strong>Education:</strong> {form.qualification}, {form.percentage}%</p><p><strong>Preference:</strong> {form.exam}, {form.centre}</p><p><strong>Documents:</strong> {uploadedDocs.length}/3 uploaded</p><p><strong>Status:</strong> {submitted ? "Submitted" : "Ready for final submission"}</p></div>}
             <div className="flex flex-wrap gap-2">
               <Button className="bg-secondary" onClick={() => setActiveStep((step) => Math.max(0, step - 1))}>Back</Button>
               <Button onClick={nextStep} disabled={!phase.access.registration && !phase.access.correction}><FileText size={18} /> {activeStep === steps.length - 1 ? "Final Submit" : "Save & Next"}</Button>

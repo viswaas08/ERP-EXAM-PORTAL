@@ -8,6 +8,7 @@ import { setStoredApplicationStatus, type StoredApplication } from "../lib/erpSt
 export function Applications() {
   const [rows, setRows] = usePersistentState<StoredApplication[]>("examPortal.applications.rows", applications);
   const [query, setQuery] = usePersistentState("examPortal.applications.query", "");
+  const [examFilter, setExamFilter] = usePersistentState("examPortal.applications.examFilter", "All Exams");
   const [status, setStatus] = usePersistentState("examPortal.applications.status", "All Statuses");
   const [category, setCategory] = usePersistentState("examPortal.applications.category", "All Categories");
   const [selectedId, setSelectedId] = usePersistentState("examPortal.applications.selectedId", rows[0]?.id ?? "");
@@ -15,10 +16,11 @@ export function Applications() {
 
   const filteredRows = useMemo(() => rows.filter((app) => {
     const queryMatch = `${app.name} ${app.id}`.toLowerCase().includes(query.toLowerCase());
+    const examMatch = examFilter === "All Exams" || app.exam === examFilter;
     const statusMatch = status === "All Statuses" || app.status === status;
     const categoryMatch = category === "All Categories" || app.category === category;
-    return queryMatch && statusMatch && categoryMatch;
-  }), [rows, query, status, category]);
+    return queryMatch && examMatch && statusMatch && categoryMatch;
+  }), [rows, query, examFilter, status, category]);
 
   const selected = rows.find((app) => app.id === selectedId);
 
@@ -43,7 +45,7 @@ export function Applications() {
     <section className="space-y-5">
       <Card className="border-l-4 border-l-primary py-3 text-sm font-medium">{notice}</Card>
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">Application Management</h1><p className="text-sm text-slate-500">Search, filter, bulk process, export, and review candidate records.</p></div><Button onClick={exportCsv}><Download size={18} /> Export</Button></div>
-      <Card className="grid gap-3 md:grid-cols-5"><Input placeholder="Search candidate" value={query} onChange={(event) => setQuery(event.target.value)} /><Select><option>All Exams</option><option>NRE-2026</option><option>SET-2026</option><option>TEC-2026</option><option>University Entrance Test</option><option>Public Service Preliminary</option></Select><Select value={status} onChange={(event) => setStatus(event.target.value)}><option>All Statuses</option><option>Approved</option><option>Pending</option><option>Returned</option><option>Rejected</option><option>Hold</option><option>Correction Required</option><option>Hall Ticket Ready</option><option>Result Published</option></Select><Select value={category} onChange={(event) => setCategory(event.target.value)}><option>All Categories</option><option>General</option><option>OBC</option><option>SC</option><option>ST</option><option>EWS</option><option>PwD</option><option>Ex-Servicemen</option></Select><Button className="bg-secondary" onClick={() => setNotice(`${filteredRows.length} application(s) found.`)}><Filter size={18} /> Filter</Button></Card>
+      <Card className="grid gap-3 md:grid-cols-5"><Input placeholder="Search candidate" value={query} onChange={(event) => setQuery(event.target.value)} /><Select value={examFilter} onChange={(event) => setExamFilter(event.target.value)}><option>All Exams</option><option>NRE-2026</option><option>SET-2026</option><option>TEC-2026</option><option>University Entrance Test</option><option>Public Service Preliminary</option></Select><Select value={status} onChange={(event) => setStatus(event.target.value)}><option>All Statuses</option><option>Approved</option><option>Pending</option><option>Returned</option><option>Rejected</option><option>Hold</option><option>Correction Required</option><option>Hall Ticket Ready</option><option>Result Published</option></Select><Select value={category} onChange={(event) => setCategory(event.target.value)}><option>All Categories</option><option>General</option><option>OBC</option><option>SC</option><option>ST</option><option>EWS</option><option>PwD</option><option>Ex-Servicemen</option></Select><Button className="bg-secondary" onClick={() => setNotice(`${filteredRows.length} application(s) found.`)}><Filter size={18} /> Filter</Button></Card>
       {selected && <Card><h2 className="mb-2 font-semibold">Review Panel</h2><p className="text-sm">{selected.name} · {selected.id} · {selected.exam} · Current status: <strong>{selected.status}</strong></p></Card>}
       <Table>
         <thead className="bg-muted"><tr>{["Application", "Candidate", "Exam", "Category", "State", "Score", "Status", "Action"].map((h) => <th className="p-3" key={h}>{h}</th>)}</tr></thead>

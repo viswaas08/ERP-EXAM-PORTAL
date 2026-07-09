@@ -9,6 +9,17 @@ const types = ["Text", "Textarea", "Email", "Password", "Number", "Date", "Dropd
 export function FormBuilder() {
   const [sections, setSections] = usePersistentState("examPortal.formBuilder.sections", formSections);
   const [fieldLabel, setFieldLabel] = usePersistentState("examPortal.formBuilder.fieldLabel", "Percentage");
+  const [fieldType, setFieldType] = usePersistentState("examPortal.formBuilder.fieldType", "Text");
+  const [placeholder, setPlaceholder] = usePersistentState("examPortal.formBuilder.placeholder", "Enter aggregate percentage");
+  const [helpText, setHelpText] = usePersistentState("examPortal.formBuilder.helpText", "Minimum 60% for automatic approval");
+  const [flags, setFlags] = usePersistentState<Record<string, boolean>>("examPortal.formBuilder.flags", {
+    Required: true,
+    Visible: true,
+    Editable: true,
+    Searchable: true,
+    "Eligibility Field": true,
+    Unique: false
+  });
   const [notice, setNotice] = usePersistentState("examPortal.formBuilder.notice", "Click any field to load it into the properties panel.");
 
   function addSection() {
@@ -44,11 +55,11 @@ export function FormBuilder() {
           <h2 className="mb-4 font-semibold">Field Properties</h2>
           <div className="space-y-3">
             <Input placeholder="Field label" value={fieldLabel} onChange={(event) => setFieldLabel(event.target.value)} />
-            <Select>{types.map((type) => <option key={type}>{type}</option>)}</Select>
-            <Input placeholder="Placeholder" defaultValue="Enter aggregate percentage" />
-            <Input placeholder="Help text" defaultValue="Minimum 60% for automatic approval" />
+            <Select value={fieldType} onChange={(event) => setFieldType(event.target.value)}>{types.map((type) => <option key={type}>{type}</option>)}</Select>
+            <Input placeholder="Placeholder" value={placeholder} onChange={(event) => setPlaceholder(event.target.value)} />
+            <Input placeholder="Help text" value={helpText} onChange={(event) => setHelpText(event.target.value)} />
             <div className="grid grid-cols-2 gap-2 text-sm">
-              {["Required", "Visible", "Editable", "Searchable", "Eligibility Field", "Unique"].map((label) => <label className="flex items-center gap-2 rounded-md border border-border p-2" key={label}><input type="checkbox" defaultChecked={label !== "Unique"} />{label}</label>)}
+              {["Required", "Visible", "Editable", "Searchable", "Eligibility Field", "Unique"].map((label) => <label className="flex items-center gap-2 rounded-md border border-border p-2" key={label}><input type="checkbox" checked={Boolean(flags[label])} onChange={(event) => setFlags((current) => ({ ...current, [label]: event.target.checked }))} />{label}</label>)}
             </div>
             <Button className="w-full" onClick={saveField}>Save Field</Button>
           </div>

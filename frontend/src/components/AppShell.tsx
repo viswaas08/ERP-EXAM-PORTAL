@@ -2,21 +2,24 @@ import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Bell, LogOut, Menu, Moon, Search, Shield, UserRound } from "lucide-react";
 import { navItems } from "../data/demo";
 import { Button } from "./ui";
-import { useState } from "react";
+import { useEffect } from "react";
 import { cn } from "../lib/utils";
 import { useAuth } from "../auth/AuthContext";
+import { usePersistentState } from "../lib/usePersistentState";
 
 export function AppShell() {
-  const [collapsed, setCollapsed] = useState(false);
-  const [dark, setDark] = useState(false);
+  const [collapsed, setCollapsed] = usePersistentState("examPortal.shell.collapsed", false);
+  const [dark, setDark] = usePersistentState("examPortal.shell.dark", false);
+  const [globalSearch, setGlobalSearch] = usePersistentState("examPortal.shell.globalSearch", "");
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+  }, [dark]);
+
   function toggleTheme() {
-    setDark((value) => {
-      document.documentElement.classList.toggle("dark", !value);
-      return !value;
-    });
+    setDark((value) => !value);
   }
 
   function handleLogout() {
@@ -52,7 +55,7 @@ export function AppShell() {
           <Button className="h-9 w-9 px-0" onClick={() => setCollapsed(!collapsed)} title="Toggle sidebar"><Menu size={18} /></Button>
           <div className="relative max-w-lg flex-1">
             <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
-            <input className="h-10 w-full rounded-md border border-border bg-background pl-10 pr-3 text-sm outline-none" placeholder="Search candidates, applications, exams" />
+            <input className="h-10 w-full rounded-md border border-border bg-background pl-10 pr-3 text-sm outline-none" placeholder="Search candidates, applications, exams" value={globalSearch} onChange={(event) => setGlobalSearch(event.target.value)} />
           </div>
           <Button className="h-9 w-9 bg-secondary px-0" title="Notifications"><Bell size={18} /></Button>
           <Button className="h-9 w-9 bg-slate-800 px-0" onClick={toggleTheme} title="Theme"><Moon size={18} /></Button>
