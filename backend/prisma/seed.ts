@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
+import { WORKFLOW_PHASE_NAMES } from "../src/services/exam.service.js";
 
 const prisma = new PrismaClient();
 const passwordHash = await bcrypt.hash("Password@123", 10);
@@ -86,8 +87,6 @@ const sectionBlueprints = [
   }
 ];
 
-const workflowPhaseNames = ["Registration", "Correction Window", "Document Verification", "Eligibility Verification", "Hall Ticket Release", "Online Examination", "Result Publication", "Archive"];
-
 async function main() {
   await prisma.auditLog.deleteMany();
   await prisma.candidateResponse.deleteMany();
@@ -169,7 +168,7 @@ async function main() {
       maximumAttempts: 1,
       status: "OPEN",
       workflowPhases: {
-        create: workflowPhaseNames.map((name, index) => ({
+        create: WORKFLOW_PHASE_NAMES.map((name, index) => ({
           name,
           status: name === "Online Examination" ? "OPEN" : "SCHEDULED",
           opensAt: new Date(now.getTime() + (index - 5) * 24 * 60 * 60 * 1000),

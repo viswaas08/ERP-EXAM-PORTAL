@@ -78,6 +78,42 @@ resultRoutes.get("/", authenticate, async (req, res) => {
   res.json(results);
 });
 
+resultRoutes.get("/submissions", authenticate, async (req, res) => {
+  const examId = String(req.query.examId || "");
+  const sessions = await prisma.examSession.findMany({
+    where: {
+      examId: examId || undefined,
+      status: "SUBMITTED"
+    },
+    include: {
+      responses: {
+        include: {
+          question: {
+            include: {
+              options: true,
+              subject: true,
+              topic: true
+            }
+          }
+        },
+        orderBy: { savedAt: "asc" }
+      }
+    },
+    orderBy: { submittedAt: "desc" }
+  });
+
+  const applications = await prisma.application.findMany({
+    where: { id: { in: sessions.map((session) => session.applicationId) } },
+    include: { candidate: { include: { user: true } }, examination: true }
+  });
+  const applicationById = new Map(applications.map((application) => [application.id, application]));
+
+  res.json(sessions.map((session) => ({
+    ...session,
+    application: applicationById.get(session.applicationId) ?? null
+  })));
+});
+
 resultRoutes.post("/evaluate", authenticate, authorize("result:publish"), async (req, res) => {
   const evaluated = await evaluateApplications(String(req.body.examId || "") || undefined);
   res.status(201).json({ evaluated: evaluated.length });

@@ -72,7 +72,7 @@ export const exams = [
   }
 ];
 
-export const phases = ["Registration", "Correction Window", "Verification", "Hall Ticket Release", "Online Examination", "Result Publication"];
+export const phases = ["Registration", "Correction Window", "Verification", "Hall Ticket Release", "Online Examination", "Evaluation", "Result Publication"];
 
 export const applications = [
   { id: "APP-2026-000101", name: "Amit Sharma", exam: "NRE-2026", category: "General", state: "Delhi", score: 85, status: "Approved" },

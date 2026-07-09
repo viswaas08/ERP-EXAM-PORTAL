@@ -7,7 +7,7 @@ import { fallbackPhase, getCandidatePhase, type CandidatePhaseSnapshot } from ".
 import { usePersistentState } from "../lib/usePersistentState";
 import { API_URL, api } from "../lib/api";
 
-const fallbackWorkflow = ["Registration", "Correction Window", "Document Verification", "Eligibility Verification", "Hall Ticket Release", "Online Examination", "Result Publication", "Archive"];
+const fallbackWorkflow = ["Registration", "Correction Window", "Document Verification", "Eligibility Verification", "Hall Ticket Release", "Online Examination", "Evaluation", "Result Publication", "Archive"];
 
 type CandidateDashboardData = {
   profile: null | {

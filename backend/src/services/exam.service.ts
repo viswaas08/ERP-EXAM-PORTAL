@@ -1,6 +1,8 @@
 import { prisma } from "../config/prisma.js";
 import { AppError } from "../utils/AppError.js";
 
+export const WORKFLOW_PHASE_NAMES = ["Registration", "Correction Window", "Document Verification", "Eligibility Verification", "Hall Ticket Release", "Online Examination", "Evaluation", "Result Publication", "Archive"];
+
 export function listExams(query: { search?: string; status?: string }) {
   return prisma.examination.findMany({
     where: {
@@ -22,20 +24,33 @@ export function listLiveExams() {
 
 export function createExam(data: any) {
   const now = new Date();
-  return prisma.examination.create({
-    data: {
-      ...data,
-      status: data.status ?? "DRAFT",
-      workflowPhases: {
-        create: ["Registration", "Correction Window", "Document Verification", "Eligibility Verification", "Hall Ticket Release", "Online Examination", "Result Publication", "Archive"].map((name, index) => ({
-          name,
-          status: index === 0 ? "OPEN" : "SCHEDULED",
-          opensAt: new Date(now.getTime() + index * 24 * 60 * 60 * 1000),
-          closesAt: new Date(now.getTime() + (index + 1) * 24 * 60 * 60 * 1000)
-        }))
+  return prisma.$transaction(async (tx) => {
+    const created = await tx.examination.create({
+      data: {
+        ...data,
+        status: data.status ?? "DRAFT",
+        workflowPhases: {
+          create: WORKFLOW_PHASE_NAMES.map((name, index) => ({
+            name,
+            status: index === 0 ? "OPEN" : "SCHEDULED",
+            opensAt: new Date(now.getTime() + index * 24 * 60 * 60 * 1000),
+            closesAt: new Date(now.getTime() + (index + 1) * 24 * 60 * 60 * 1000)
+          }))
+        }
       }
-    },
-    include: { workflowPhases: true, _count: { select: { applications: true } } }
+    });
+
+    await tx.questionBank.create({
+      data: {
+        examId: created.id,
+        name: `${created.code} Main Question Bank`
+      }
+    });
+
+    return tx.examination.findUniqueOrThrow({
+      where: { id: created.id },
+      include: { workflowPhases: true, _count: { select: { applications: true } } }
+    });
   });
 }
 
@@ -53,21 +68,34 @@ export function archiveExam(id: string) {
 
 export async function cloneExam(id: string) {
   const exam = await prisma.examination.findUniqueOrThrow({ where: { id }, include: { workflowPhases: true } });
-  return prisma.examination.create({
-    data: {
-      name: `${exam.name} Copy`,
-      code: `${exam.code}-COPY-${Date.now()}`,
-      description: exam.description,
-      department: exam.department,
-      durationMinutes: exam.durationMinutes,
-      maximumMarks: exam.maximumMarks,
-      passingMarks: exam.passingMarks,
-      negativeMarking: exam.negativeMarking,
-      languages: exam.languages,
-      status: "DRAFT",
-      workflowPhases: { create: exam.workflowPhases.map((phase) => ({ name: phase.name, status: "SCHEDULED", opensAt: phase.opensAt, closesAt: phase.closesAt })) }
-    },
-    include: { workflowPhases: true, _count: { select: { applications: true } } }
+  return prisma.$transaction(async (tx) => {
+    const created = await tx.examination.create({
+      data: {
+        name: `${exam.name} Copy`,
+        code: `${exam.code}-COPY-${Date.now()}`,
+        description: exam.description,
+        department: exam.department,
+        durationMinutes: exam.durationMinutes,
+        maximumMarks: exam.maximumMarks,
+        passingMarks: exam.passingMarks,
+        negativeMarking: exam.negativeMarking,
+        languages: exam.languages,
+        status: "DRAFT",
+        workflowPhases: { create: exam.workflowPhases.map((phase) => ({ name: phase.name, status: "SCHEDULED", opensAt: phase.opensAt, closesAt: phase.closesAt })) }
+      }
+    });
+
+    await tx.questionBank.create({
+      data: {
+        examId: created.id,
+        name: `${created.code} Main Question Bank`
+      }
+    });
+
+    return tx.examination.findUniqueOrThrow({
+      where: { id: created.id },
+      include: { workflowPhases: true, _count: { select: { applications: true } } }
+    });
   });
 }
 
@@ -126,6 +154,7 @@ export async function getCandidatePhaseSnapshot(examId?: string) {
     eligibilityVerification: normalized.includes("eligibility"),
     hallTicket: normalized.includes("hall ticket"),
     onlineExam: normalized.includes("online examination") || normalized.includes("examination"),
+    evaluation: normalized.includes("evaluation"),
     result: normalized.includes("result"),
     archiveDownloads: normalized.includes("archive")
   };

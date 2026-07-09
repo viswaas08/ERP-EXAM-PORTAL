@@ -19,6 +19,12 @@ type QuestionRow = {
 };
 
 type RawQuestionRow = Partial<QuestionRow> & Record<string, unknown>;
+type QuestionBankSummary = {
+  id: string;
+  name: string;
+  exam: { id: string; code: string; name: string };
+  _count?: { questions: number };
+};
 
 const initialQuestions: QuestionRow[] = [
   { prompt: "Constitutional provisions are amended by which article?", subject: { name: "General Studies" }, topic: { name: "Constitution" }, questionType: "MCQ", difficulty: "Easy", marks: 2, negativeMarks: 0.5, tags: ["recruitment", "Q1"] },
@@ -80,29 +86,51 @@ export function QuestionBank() {
   const [difficulty, setDifficulty] = usePersistentState("examPortal.questions.difficulty", "All Difficulties");
   const [type, setType] = usePersistentState("examPortal.questions.type", "All Types");
   const [examFilter, setExamFilter] = usePersistentState("examPortal.admin.selectedExamCode", "All Exams");
+  const [selectedExamId] = usePersistentState<string | undefined>("examPortal.examinations.selectedExamId", undefined);
   const [draftPrompt, setDraftPrompt] = usePersistentState("examPortal.questions.draft.prompt", "");
   const [draftSubject, setDraftSubject] = usePersistentState("examPortal.questions.draft.subject", "General Studies");
   const [draftTopic, setDraftTopic] = usePersistentState("examPortal.questions.draft.topic", "General");
   const [draftDifficulty, setDraftDifficulty] = usePersistentState("examPortal.questions.draft.difficulty", "Medium");
   const [draftType, setDraftType] = usePersistentState("examPortal.questions.draft.type", "MCQ");
+  const [banks, setBanks] = usePersistentState<QuestionBankSummary[]>("examPortal.questions.banks", []);
+  const [selectedBankId, setSelectedBankId] = usePersistentState("examPortal.questions.selectedBankId", "");
+  const [sourceBankId, setSourceBankId] = usePersistentState("examPortal.questions.sourceBankId", "");
 
-  async function loadQuestions() {
+  async function loadQuestions(bankId = selectedBankId) {
     try {
-      const data = await api<QuestionRow[]>("/questions/bank");
+      const data = await api<QuestionRow[]>(bankId ? `/questions/bank?bankId=${encodeURIComponent(bankId)}` : "/questions/bank");
       if (data && data.length > 0) {
         setRows(normalizeQuestionRows(data));
-        setNotice(`${data.length} database question(s) loaded.`);
+        setNotice(`${data.length} database question(s) loaded${bankId ? " from the selected bank" : ""}.`);
       } else {
-        setNotice("No questions found in the database. Using local mock questions.");
+        setRows([]);
+        setNotice("No questions found in the selected bank. Using the empty database view.");
       }
     } catch {
       setNotice("Could not load database questions. Using local mock questions.");
     }
   }
 
+  async function loadBanks() {
+    try {
+      const data = await api<QuestionBankSummary[]>("/questions/banks");
+      setBanks(data);
+      if (data.length > 0) {
+        setSelectedBankId((current) => data.some((bank) => bank.id === current) ? current : data[0].id);
+        setSourceBankId((current) => data.some((bank) => bank.id === current) ? current : data[0].id);
+      }
+    } catch {
+      setNotice("Could not load question banks. Showing local draft questions.");
+    }
+  }
+
+  useEffect(() => {
+    void loadBanks();
+  }, []);
+
   useEffect(() => {
     void loadQuestions();
-  }, []);
+  }, [selectedBankId]);
 
   const safeRows = useMemo(() => normalizeQuestionRows(rows), [rows]);
 
@@ -121,6 +149,32 @@ export function QuestionBank() {
   const subjects = useMemo(() => ["All Subjects", ...Array.from(new Set([...subjectOptions, ...safeRows.map((q) => q.subject.name)])).sort()], [safeRows]);
   const examCodes = useMemo(() => Array.from(new Set(safeRows.map((q) => q.bank?.exam.code).filter(Boolean))), [safeRows]);
   const totalMarks = safeRows.reduce((sum, q) => sum + Number(q.marks || 0), 0);
+  const selectedBank = banks.find((bank) => bank.id === selectedBankId) ?? null;
+
+  async function importBank() {
+    if (!sourceBankId) {
+      setNotice("Choose a source question bank to import.");
+      return;
+    }
+
+    if (!selectedExamId) {
+      setNotice("Select a target examination first from the Examinations page.");
+      return;
+    }
+
+    try {
+      const imported = await api<QuestionBankSummary>("/questions/banks/import", {
+        method: "POST",
+        body: JSON.stringify({ sourceBankId, targetExamId: selectedExamId })
+      });
+      setBanks((current) => [imported, ...current.filter((bank) => bank.id !== imported.id)]);
+      setSelectedBankId(imported.id);
+      setNotice(`Imported ${imported.name} into ${imported.exam.code}.`);
+      await loadQuestions(imported.id);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not import the question bank.");
+    }
+  }
 
   function addQuestion() {
     const prompt = draftPrompt.trim() || `New sample question ${safeRows.length + 1}?`;
@@ -178,7 +232,18 @@ export function QuestionBank() {
       <Card className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-semibold">Add Question</h2>
-          <Badge>{examCodes.length ? examCodes.join(", ") : "Local Draft Bank"}</Badge>
+          <Badge>{selectedBank ? `${selectedBank.exam.code} · ${selectedBank.name}` : (examCodes.length ? examCodes.join(", ") : "Local Draft Bank")}</Badge>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <Select value={selectedBankId} onChange={(event) => setSelectedBankId(event.target.value)}>
+            <option value="">Local Draft Questions</option>
+            {banks.map((bank) => <option key={bank.id} value={bank.id}>{bank.exam.code} - {bank.name} ({bank._count?.questions ?? 0})</option>)}
+          </Select>
+          <Select value={sourceBankId} onChange={(event) => setSourceBankId(event.target.value)}>
+            <option value="">Choose source bank</option>
+            {banks.filter((bank) => bank.id !== selectedBankId).map((bank) => <option key={bank.id} value={bank.id}>{bank.exam.code} - {bank.name}</option>)}
+          </Select>
+          <Button className="bg-secondary" onClick={importBank}>Import bank into selected exam</Button>
         </div>
         <textarea className="min-h-24 w-full rounded-md border border-border bg-background p-3 text-sm" placeholder="Enter question prompt" value={draftPrompt} onChange={(event) => setDraftPrompt(event.target.value)} />
         <div className="grid gap-3 md:grid-cols-5">

@@ -20,6 +20,7 @@ export type CandidatePhaseSnapshot = {
     eligibilityVerification: boolean;
     hallTicket: boolean;
     onlineExam: boolean;
+    evaluation: boolean;
     result: boolean;
     archiveDownloads: boolean;
   };
@@ -62,6 +63,7 @@ export const fallbackPhase: CandidatePhaseSnapshot = {
     eligibilityVerification: false,
     hallTicket: false,
     onlineExam: false,
+    evaluation: false,
     result: false,
     archiveDownloads: false
   }
