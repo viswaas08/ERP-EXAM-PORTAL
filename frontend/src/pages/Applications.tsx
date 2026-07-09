@@ -1,11 +1,12 @@
 import { Download, Eye, Filter, RotateCcw } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { applications } from "../data/demo";
 import { Badge, Button, Card, Input, Select, Table } from "../components/ui";
 import { usePersistentState } from "../lib/usePersistentState";
+import { setStoredApplicationStatus, type StoredApplication } from "../lib/erpStorage";
 
 export function Applications() {
-  const [rows, setRows] = usePersistentState("examPortal.applications.rows", applications);
+  const [rows, setRows] = usePersistentState<StoredApplication[]>("examPortal.applications.rows", applications);
   const [query, setQuery] = usePersistentState("examPortal.applications.query", "");
   const [status, setStatus] = usePersistentState("examPortal.applications.status", "All Statuses");
   const [category, setCategory] = usePersistentState("examPortal.applications.category", "All Categories");
@@ -33,7 +34,7 @@ export function Applications() {
   }
 
   function returnForCorrection(id: string) {
-    setRows((current) => current.map((app) => app.id === id ? { ...app, status: "Returned" } : app));
+    setRows(setStoredApplicationStatus(id, "Returned"));
     setSelectedId(id);
     setNotice(`${id} returned for correction with remarks.`);
   }

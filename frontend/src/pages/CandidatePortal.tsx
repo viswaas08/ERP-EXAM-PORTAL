@@ -5,6 +5,7 @@ import { useAuth } from "../auth/AuthContext";
 import { Button, Card, Input, Select } from "../components/ui";
 import { fallbackPhase, getCandidatePhase, type CandidatePhaseSnapshot } from "../lib/workflow";
 import { usePersistentState } from "../lib/usePersistentState";
+import { upsertStoredApplication } from "../lib/erpStorage";
 
 const steps = ["Personal Details", "Address", "Education", "Experience", "Preferences", "Documents", "Preview", "Submit"];
 const nationalities = ["Indian", "Nepalese", "Bhutanese", "OCI", "Other"];
@@ -64,6 +65,15 @@ export function CandidatePortal() {
       return;
     }
     setSubmitted(true);
+    upsertStoredApplication({
+      id: "APP-2026-000501",
+      name: form.name,
+      exam: "NRE-2026",
+      category: "General",
+      state: "Maharashtra",
+      score: Number(form.percentage) || 0,
+      status: "Pending"
+    });
     setNotice("Application APP-2026-000501 submitted and acknowledgement generated.");
   }
 

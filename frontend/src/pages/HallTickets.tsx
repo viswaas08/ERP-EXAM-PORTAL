@@ -5,7 +5,7 @@ import { Badge, Button, Card, Table } from "../components/ui";
 import { usePersistentState } from "../lib/usePersistentState";
 
 export function HallTickets() {
-  const [generated, setGenerated] = usePersistentState("examPortal.hallTickets.generated", 500);
+  const [generated, setGenerated] = usePersistentState("examPortal.hallTickets.generated", 0);
   const [notice, setNotice] = usePersistentState("examPortal.hallTickets.notice", "Hall ticket batch is ready.");
   const [regenerated, setRegenerated] = usePersistentState<string[]>("examPortal.hallTickets.regenerated", []);
 
