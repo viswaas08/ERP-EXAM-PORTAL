@@ -5,6 +5,7 @@ import { applicationRoutes } from "./application.routes.js";
 import { ruleRoutes } from "./rule.routes.js";
 import { dashboardRoutes } from "./dashboard.routes.js";
 import { stateRoutes } from "./state.routes.js";
+import { candidateRoutes } from "./candidate.routes.js";
 import { prisma } from "../config/prisma.js";
 import { streamPortalPdf } from "../services/pdf.service.js";
 
@@ -16,8 +17,9 @@ apiRoutes.use("/examinations", examRoutes);
 apiRoutes.use("/applications", applicationRoutes);
 apiRoutes.use("/eligibility-rules", ruleRoutes);
 apiRoutes.use("/state", stateRoutes);
+apiRoutes.use("/candidate", candidateRoutes);
 
-apiRoutes.get("/candidate/active-phase", async (req, res, next) => {
+apiRoutes.get("/candidate-public/active-phase", async (req, res, next) => {
   try {
     res.json(await import("../services/exam.service.js").then((service) => service.getCandidatePhaseSnapshot(req.query.examId as string | undefined)));
   } catch (error) {

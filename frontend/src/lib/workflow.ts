@@ -41,5 +41,5 @@ export const fallbackPhase: CandidatePhaseSnapshot = {
 };
 
 export function getCandidatePhase() {
-  return api<CandidatePhaseSnapshot>("/candidate/active-phase");
+  return api<CandidatePhaseSnapshot>("/candidate-public/active-phase");
 }

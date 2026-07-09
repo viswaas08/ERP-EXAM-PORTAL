@@ -5,7 +5,7 @@ import { useAuth } from "../auth/AuthContext";
 import { Button, Card, Input, Select } from "../components/ui";
 import { fallbackPhase, getCandidatePhase, type CandidatePhaseSnapshot } from "../lib/workflow";
 import { usePersistentState } from "../lib/usePersistentState";
-import { upsertStoredApplication } from "../lib/erpStorage";
+import { api } from "../lib/api";
 
 const steps = ["Personal Details", "Address", "Education", "Experience", "Preferences", "Documents", "Preview", "Submit"];
 const nationalities = ["Indian", "Nepalese", "Bhutanese", "OCI", "Other"];
@@ -19,6 +19,7 @@ export function CandidatePortal() {
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = usePersistentState("examPortal.candidateRegistration.activeStep", 0);
   const [submitted, setSubmitted] = usePersistentState("examPortal.candidateRegistration.submitted", false);
+  const [applicationNo, setApplicationNo] = usePersistentState("examPortal.candidateRegistration.applicationNo", "");
   const [uploadedDocs, setUploadedDocs] = usePersistentState<string[]>("examPortal.candidateRegistration.uploadedDocs", []);
   const [notice, setNotice] = usePersistentState("examPortal.candidateRegistration.notice", "Complete each step and preview before final submission.");
   const [phase, setPhase] = useState<CandidatePhaseSnapshot>(fallbackPhase);
@@ -61,7 +62,7 @@ export function CandidatePortal() {
     setNotice(`${doc} uploaded successfully.`);
   }
 
-  function nextStep() {
+  async function nextStep() {
     if (!phase.access.registration && !phase.access.correction) {
       setNotice(`Registration is locked during ${phase.activePhase?.name ?? "the current phase"}.`);
       return;
@@ -71,21 +72,27 @@ export function CandidatePortal() {
       setNotice(`${steps[activeStep + 1]} is now active.`);
       return;
     }
-    setSubmitted(true);
-    upsertStoredApplication({
-      id: "APP-2026-000501",
-      name: form.name,
-      exam: form.exam.includes("National") ? "NRE-2026" : form.exam,
-      category: form.category,
-      state: "Maharashtra",
-      score: Number(form.percentage) || 0,
-      status: "Pending"
-    });
-    setNotice("Application APP-2026-000501 submitted and acknowledgement generated.");
+    try {
+      const application = await api<{ applicationNo: string }>("/candidate/registration", {
+        method: "POST",
+        body: JSON.stringify({
+          ...form,
+          documents: uploadedDocs,
+          state: "Maharashtra",
+          district: "Pune",
+          address: "Candidate address"
+        })
+      });
+      setApplicationNo(application.applicationNo);
+      setSubmitted(true);
+      setNotice(`Application ${application.applicationNo} saved in Neon database.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Registration could not be saved to database.");
+    }
   }
 
   function downloadAcknowledgement() {
-    const content = `Application Acknowledgement\nApplication No: APP-2026-000501\nCandidate: ${form.name}\nEmail: ${form.email}\nStatus: Submitted`;
+    const content = `Application Acknowledgement\nApplication No: ${applicationNo || "Pending"}\nCandidate: ${form.name}\nEmail: ${form.email}\nStatus: ${submitted ? "Submitted" : "Draft"}`;
     const url = URL.createObjectURL(new Blob([content], { type: "text/plain" }));
     const link = document.createElement("a");
     link.href = url;
@@ -119,7 +126,7 @@ export function CandidatePortal() {
             {activeStep === 3 && <textarea className="min-h-28 w-full rounded-md border border-border bg-background p-3 text-sm" placeholder="Experience details, if any" value={form.experience} onChange={(event) => updateField("experience", event.target.value)} />}
             {activeStep === 4 && <div className="grid gap-3 md:grid-cols-2"><Select value={form.exam} onChange={(event) => updateField("exam", event.target.value)}>{exams.map((item) => <option key={item}>{item}</option>)}</Select><Select value={form.centre} onChange={(event) => updateField("centre", event.target.value)}>{centres.map((item) => <option key={item}>{item}</option>)}</Select></div>}
             {activeStep === 5 && <div className="grid gap-3 md:grid-cols-3">{["Photo", "Signature", "Degree Certificate"].map((item) => <button className={`grid h-28 place-items-center rounded-md border border-dashed border-border text-sm ${uploadedDocs.includes(item) ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950" : ""}`} key={item} onClick={() => uploadDoc(item)}><Upload size={20} />{uploadedDocs.includes(item) ? `${item} Uploaded` : item}</button>)}</div>}
-            {activeStep >= 6 && <div className="rounded-md bg-muted p-4 text-sm"><p><strong>Name:</strong> {form.name}</p><p><strong>Email:</strong> {form.email}</p><p><strong>Education:</strong> {form.qualification}, {form.percentage}%</p><p><strong>Preference:</strong> {form.exam}, {form.centre}</p><p><strong>Documents:</strong> {uploadedDocs.length}/3 uploaded</p><p><strong>Status:</strong> {submitted ? "Submitted" : "Ready for final submission"}</p></div>}
+            {activeStep >= 6 && <div className="rounded-md bg-muted p-4 text-sm"><p><strong>Name:</strong> {form.name}</p><p><strong>Email:</strong> {form.email}</p><p><strong>Education:</strong> {form.qualification}, {form.percentage}%</p><p><strong>Preference:</strong> {form.exam}, {form.centre}</p><p><strong>Documents:</strong> {uploadedDocs.length}/3 uploaded</p><p><strong>Application No:</strong> {applicationNo || "Will be generated on submit"}</p><p><strong>Status:</strong> {submitted ? "Submitted to database" : "Ready for final submission"}</p></div>}
             <div className="flex flex-wrap gap-2">
               <Button className="bg-secondary" onClick={() => setActiveStep((step) => Math.max(0, step - 1))}>Back</Button>
               <Button onClick={nextStep} disabled={!phase.access.registration && !phase.access.correction}><FileText size={18} /> {activeStep === steps.length - 1 ? "Final Submit" : "Save & Next"}</Button>
