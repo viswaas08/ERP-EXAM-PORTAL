@@ -62,18 +62,26 @@ Backend: `http://localhost:8080/api`
 
 This repository includes:
 
+- `Dockerfile` for a single combined Render service
 - `backend/Dockerfile` for the Express API
 - `frontend/Dockerfile` for the React frontend served by Nginx
 - `render.yaml` for Render Blueprint deployment
 
-On Render, set these secrets in the dashboard:
+Recommended Render setup: deploy one Docker web service using the root `Dockerfile`.
+
+Use:
+
+- Dockerfile path: `./Dockerfile`
+- Health check path: `/health`
+
+On Render, set these environment variables:
 
 - `DATABASE_URL`
-- `CLIENT_ORIGIN`
-- `VITE_API_URL`
+- `CLIENT_ORIGIN` to your Render service URL after first deploy
 - Cloudinary variables if file upload is enabled
+- `VITE_API_URL` can be left blank for single-service deployment because the frontend calls `/api` on the same domain.
 
-After the backend service is live, run the Prisma migration and seed commands from a Render shell or a trusted local machine:
+After the service is live, run the Prisma migration and seed commands from a Render shell or a trusted local machine:
 
 ```bash
 npm run prisma:migrate --workspace backend
