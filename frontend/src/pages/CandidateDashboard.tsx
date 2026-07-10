@@ -1,5 +1,5 @@
 import { Download, FileText, LogOut, MonitorPlay, RefreshCw, Ticket, ListChecks } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Badge, Button, Card, Select } from "../components/ui";
@@ -53,45 +53,47 @@ export function CandidateDashboard() {
   const [selectedApplicationNo, setSelectedApplicationNo] = usePersistentState("examPortal.candidateDashboard.selectedApplicationNo", "");
   const [calculationPolicy, setCalculationPolicy] = useState("latest"); // "latest" | "highest"
 
+  const applicationsRef = useRef<CandidateApplication[]>([]);
+
   async function loadDashboard(targetAppNo?: string) {
     const appNo = targetAppNo || selectedApplicationNo;
-    const currentApps = dashboard?.applications ?? [];
-    const targetApp = currentApps.find((a) => a.applicationNo === appNo);
+    // Resolve examId from the current applications list (ref) rather than stale dashboard state
+    const knownApps = applicationsRef.current;
+    const targetApp = knownApps.find((a) => a.applicationNo === appNo);
     const examId = targetApp?.examination.id || "";
     const url = examId ? `/candidate/dashboard?examId=${encodeURIComponent(examId)}` : "/candidate/dashboard";
 
     api<CandidateDashboardData>(url)
       .then((data) => {
         setDashboard(data);
+        const apps = data.applications ?? (data.application ? [data.application] : []);
+        applicationsRef.current = apps;
         if (data.phase) {
           setPhase(data.phase);
           setSelectedPhaseName(data.phase.activePhase?.name ?? "");
         }
-        const apps = data.applications ?? (data.application ? [data.application] : []);
+        // Only auto-select if no current selection or current selection not found
         setSelectedApplicationNo((current) => {
           const activeAppNo = targetAppNo || current;
-          const currentApplication = apps.find((item) => item.applicationNo === activeAppNo);
-          if (currentApplication) return activeAppNo;
+          if (activeAppNo && apps.find((item) => item.applicationNo === activeAppNo)) {
+            return activeAppNo;
+          }
           return apps.find((item) => item.hallTicket)?.applicationNo || apps[0]?.applicationNo || "";
         });
       })
       .catch(() => setNotice("Login as a candidate to view dashboard."));
   }
 
+  // Initial load
   useEffect(() => {
     void loadDashboard();
   }, []);
 
-  useEffect(() => {
-    if (selectedApplicationNo) {
-      void loadDashboard(selectedApplicationNo);
-    }
-  }, [selectedApplicationNo]);
-
+  // Poll for updates every 10 seconds (non-disruptive)
   useEffect(() => {
     const refresh = window.setInterval(() => {
       void loadDashboard(selectedApplicationNo);
-    }, 1500);
+    }, 10000);
     return () => window.clearInterval(refresh);
   }, [selectedApplicationNo]);
 
@@ -211,7 +213,7 @@ export function CandidateDashboard() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {applications.length > 0 && (
-              <Select className="max-w-xs" value={selectedApplication?.applicationNo ?? ""} onChange={(event) => setSelectedApplicationNo(event.target.value)}>
+              <Select className="max-w-xs" value={selectedApplication?.applicationNo ?? ""} onChange={(event) => { const appNo = event.target.value; setSelectedApplicationNo(appNo); void loadDashboard(appNo); }}>
                 {applications.map((item) => (
                   <option key={item.applicationNo} value={item.applicationNo}>
                     {item.examination.code} - {item.applicationNo} - {item.hallTicket ? "Hall Ticket Ready" : item.status}
