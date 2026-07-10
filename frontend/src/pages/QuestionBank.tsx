@@ -1,5 +1,5 @@
-import { BookOpenCheck, FileText, Image, Layers, Plus, Shuffle } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { BookOpenCheck, FileText, Image, Layers, Plus, Shuffle, Copy, CheckCircle, HelpCircle, ArrowRightLeft } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, Input, Select, Table } from "../components/ui";
 import { usePersistentState } from "../lib/usePersistentState";
 import { api } from "../lib/api";
@@ -19,6 +19,7 @@ type QuestionRow = {
 };
 
 type RawQuestionRow = Partial<QuestionRow> & Record<string, unknown>;
+
 type QuestionBankSummary = {
   id: string;
   name: string;
@@ -26,12 +27,14 @@ type QuestionBankSummary = {
   _count?: { questions: number };
 };
 
-const initialQuestions: QuestionRow[] = [
-  { prompt: "Constitutional provisions are amended by which article?", subject: { name: "General Studies" }, topic: { name: "Constitution" }, questionType: "MCQ", difficulty: "Easy", marks: 2, negativeMarks: 0.5, tags: ["recruitment", "Q1"] },
-  { prompt: "Find the next number in the sequence.", subject: { name: "Aptitude" }, topic: { name: "Number Series" }, questionType: "Numerical", difficulty: "Medium", marks: 2, negativeMarks: 0.5, tags: ["recruitment", "Q2"] },
-  { prompt: "Evaluate the numerical expression.", subject: { name: "Mathematics" }, topic: { name: "Algebra" }, questionType: "True False", difficulty: "Hard", marks: 2, negativeMarks: 0.5, tags: ["recruitment", "Q3"] },
-  { prompt: "Identify the correct network topology.", subject: { name: "Computer" }, topic: { name: "Networking" }, questionType: "Image MCQ", difficulty: "Medium", marks: 2, negativeMarks: 0.5, tags: ["recruitment", "Q4"] }
-];
+type ExamOption = {
+  id: string;
+  code: string;
+  name: string;
+  examName?: string;
+  examCode?: string;
+  subject?: string;
+};
 
 const subjectOptions = ["General Studies", "Aptitude", "Mathematics", "Computer", "English", "Maths", "Chemistry", "Physics", "Reasoning", "Current Affairs", "Domain Knowledge"];
 const difficulties = ["All Difficulties", "Easy", "Medium", "Hard", "Expert"];
@@ -73,41 +76,45 @@ function normalizeQuestionRow(row: RawQuestionRow, index: number): QuestionRow {
 }
 
 function normalizeQuestionRows(value: unknown): QuestionRow[] {
-  if (!Array.isArray(value)) return initialQuestions;
+  if (!Array.isArray(value)) return [];
   return value.map((row, index) => normalizeQuestionRow((row ?? {}) as RawQuestionRow, index));
 }
 
 export function QuestionBank() {
-  const [rows, setRows] = usePersistentState<QuestionRow[]>("examPortal.questions.rows", initialQuestions);
-  const [notice, setNotice] = usePersistentState("examPortal.questions.notice", "Question bank ready.");
-  const [paperCount, setPaperCount] = usePersistentState("examPortal.questions.paperCount", 0);
-  const [search, setSearch] = usePersistentState("examPortal.questions.search", "");
-  const [subject, setSubject] = usePersistentState("examPortal.questions.subject", "All Subjects");
-  const [difficulty, setDifficulty] = usePersistentState("examPortal.questions.difficulty", "All Difficulties");
-  const [type, setType] = usePersistentState("examPortal.questions.type", "All Types");
-  const [examFilter, setExamFilter] = usePersistentState("examPortal.admin.selectedExamCode", "All Exams");
-  const [selectedExamId] = usePersistentState<string | undefined>("examPortal.examinations.selectedExamId", undefined);
-  const [draftPrompt, setDraftPrompt] = usePersistentState("examPortal.questions.draft.prompt", "");
-  const [draftSubject, setDraftSubject] = usePersistentState("examPortal.questions.draft.subject", "General Studies");
-  const [draftTopic, setDraftTopic] = usePersistentState("examPortal.questions.draft.topic", "General");
-  const [draftDifficulty, setDraftDifficulty] = usePersistentState("examPortal.questions.draft.difficulty", "Medium");
-  const [draftType, setDraftType] = usePersistentState("examPortal.questions.draft.type", "MCQ");
-  const [banks, setBanks] = usePersistentState<QuestionBankSummary[]>("examPortal.questions.banks", []);
-  const [selectedBankId, setSelectedBankId] = usePersistentState("examPortal.questions.selectedBankId", "");
-  const [sourceBankId, setSourceBankId] = usePersistentState("examPortal.questions.sourceBankId", "");
+  const [rows, setRows] = useState<QuestionRow[]>([]);
+  const [notice, setNotice] = useState("Question bank ready.");
+  const [paperCount, setPaperCount] = useState(0);
+  const [search, setSearch] = useState("");
+  const [subject, setSubject] = useState("All Subjects");
+  const [difficulty, setDifficulty] = useState("All Difficulties");
+  const [type, setType] = useState("All Types");
+  const [examFilter, setExamFilter] = useState("All Exams");
+
+  // Selection states
+  const [selectedExamId, setSelectedExamId] = usePersistentState<string | undefined>("examPortal.examinations.selectedExamId", undefined);
+  const [banks, setBanks] = useState<QuestionBankSummary[]>([]);
+  const [exams, setExams] = useState<ExamOption[]>([]);
+  const [selectedBankId, setSelectedBankId] = useState("");
+  const [sourceBankId, setSourceBankId] = useState("");
+
+  // Create Question State
+  const [draftPrompt, setDraftPrompt] = useState("");
+  const [draftSubject, setDraftSubject] = useState("General Studies");
+  const [draftTopic, setDraftTopic] = useState("General");
+  const [draftDifficulty, setDraftDifficulty] = useState("Medium");
+  const [draftType, setDraftType] = useState("MCQ");
 
   async function loadQuestions(bankId = selectedBankId) {
+    if (!bankId) {
+      setRows([]);
+      return;
+    }
     try {
-      const data = await api<QuestionRow[]>(bankId ? `/questions/bank?bankId=${encodeURIComponent(bankId)}` : "/questions/bank");
-      if (data && data.length > 0) {
-        setRows(normalizeQuestionRows(data));
-        setNotice(`${data.length} database question(s) loaded${bankId ? " from the selected bank" : ""}.`);
-      } else {
-        setRows([]);
-        setNotice("No questions found in the selected bank. Using the empty database view.");
-      }
+      const data = await api<QuestionRow[]>(`/questions/bank?bankId=${encodeURIComponent(bankId)}`);
+      setRows(normalizeQuestionRows(data));
+      setNotice(`${data.length} question(s) loaded from the selected bank.`);
     } catch {
-      setNotice("Could not load database questions. Using local mock questions.");
+      setNotice("Could not load database questions. Select a different question bank.");
     }
   }
 
@@ -120,12 +127,25 @@ export function QuestionBank() {
         setSourceBankId((current) => data.some((bank) => bank.id === current) ? current : data[0].id);
       }
     } catch {
-      setNotice("Could not load question banks. Showing local draft questions.");
+      setNotice("Could not load question banks.");
+    }
+  }
+
+  async function loadExams() {
+    try {
+      const data = await api<ExamOption[]>("/examinations");
+      setExams(data);
+      if (data.length > 0 && !selectedExamId) {
+        setSelectedExamId(data[0].id);
+      }
+    } catch {
+      setNotice("Could not load examinations.");
     }
   }
 
   useEffect(() => {
     void loadBanks();
+    void loadExams();
   }, []);
 
   useEffect(() => {
@@ -147,18 +167,19 @@ export function QuestionBank() {
   }, [safeRows, search, subject, difficulty, type, examFilter]);
 
   const subjects = useMemo(() => ["All Subjects", ...Array.from(new Set([...subjectOptions, ...safeRows.map((q) => q.subject.name)])).sort()], [safeRows]);
-  const examCodes = useMemo(() => Array.from(new Set(safeRows.map((q) => q.bank?.exam.code).filter(Boolean))), [safeRows]);
+  const examCodes = useMemo(() => Array.from(new Set(banks.map((bank) => bank.exam.code).filter(Boolean))), [banks]);
   const totalMarks = safeRows.reduce((sum, q) => sum + Number(q.marks || 0), 0);
   const selectedBank = banks.find((bank) => bank.id === selectedBankId) ?? null;
+  const targetExam = exams.find((exam) => exam.id === selectedExamId) ?? null;
 
   async function importBank() {
     if (!sourceBankId) {
-      setNotice("Choose a source question bank to import.");
+      setNotice("Choose a source question bank to copy questions from.");
       return;
     }
 
     if (!selectedExamId) {
-      setNotice("Select a target examination first from the Examinations page.");
+      setNotice("Select a target examination to import the questions into.");
       return;
     }
 
@@ -169,35 +190,57 @@ export function QuestionBank() {
       });
       setBanks((current) => [imported, ...current.filter((bank) => bank.id !== imported.id)]);
       setSelectedBankId(imported.id);
-      setNotice(`Imported ${imported.name} into ${imported.exam.code}.`);
+      setNotice(`Imported ${imported.name} successfully into ${imported.exam.code || "target exam"}.`);
       await loadQuestions(imported.id);
+      await loadBanks();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not import the question bank.");
     }
   }
 
-  function addQuestion() {
-    const prompt = draftPrompt.trim() || `New sample question ${safeRows.length + 1}?`;
-    const next: QuestionRow = {
-      prompt,
-      subject: { name: draftSubject },
-      topic: { name: draftTopic.trim() || "General" },
-      questionType: draftType,
-      difficulty: draftDifficulty,
-      marks: 2,
-      negativeMarks: 0.5,
-      tags: ["admin-draft", `Q${safeRows.length + 1}`],
-      options: [
-        { id: `draft-${Date.now()}-1`, text: "Option A", isCorrect: true },
-        { id: `draft-${Date.now()}-2`, text: "Option B", isCorrect: false },
-        { id: `draft-${Date.now()}-3`, text: "Option C", isCorrect: false },
-        { id: `draft-${Date.now()}-4`, text: "Option D", isCorrect: false }
-      ]
-    };
-    setRows((current) => [next, ...normalizeQuestionRows(current)]);
-    setDraftPrompt("");
-    setDraftTopic("General");
-    setNotice("Question added to the admin question bank as a draft.");
+  async function addQuestion() {
+    if (!selectedBankId) {
+      setNotice("Select a question bank before creating a question.");
+      return;
+    }
+    const prompt = draftPrompt.trim();
+    if (!prompt) {
+      setNotice("Please write a question prompt.");
+      return;
+    }
+
+    try {
+      const payload = {
+        bankId: selectedBankId,
+        subject: draftSubject,
+        topic: draftTopic.trim() || "General",
+        questionType: draftType,
+        difficulty: draftDifficulty,
+        prompt,
+        explanation: "Auto generated explanation",
+        marks: 2,
+        negativeMarks: 0.5,
+        options: [
+          { text: "Option A", isCorrect: true },
+          { text: "Option B", isCorrect: false },
+          { text: "Option C", isCorrect: false },
+          { text: "Option D", isCorrect: false }
+        ]
+      };
+
+      await api("/questions", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+
+      setDraftPrompt("");
+      setDraftTopic("General");
+      setNotice("Question successfully created and saved to bank.");
+      await loadQuestions();
+      await loadBanks();
+    } catch (err) {
+      setNotice("Failed to add question to database.");
+    }
   }
 
   function generatePaper() {
@@ -206,10 +249,19 @@ export function QuestionBank() {
   }
 
   return (
-    <section className="space-y-5">
-      <Card className="border-l-4 border-l-primary py-3 text-sm font-medium">{notice}</Card>
+    <section className="space-y-6">
+      {/* Notice Banner */}
+      <Card className="border-l-4 border-l-primary py-3 text-sm font-semibold bg-primary/5 text-primary flex items-center gap-2">
+        <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+        {notice}
+      </Card>
+
+      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h1 className="text-2xl font-bold">Question Bank</h1><p className="text-sm text-slate-500">Subjects, topics, difficulty levels, question types, explanations, and random paper generation.</p></div>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Question Registry</h1>
+          <p className="text-slate-500 mt-1">Map, import, and draft questions assigned to competitive university examinations.</p>
+        </div>
         <div className="flex flex-wrap gap-2">
           <Button className="bg-slate-700" onClick={() => {
             setSearch("");
@@ -219,89 +271,255 @@ export function QuestionBank() {
             setExamFilter("All Exams");
             setNotice("Filters reset.");
           }}>Reset Filters</Button>
-          <Button className="bg-secondary" onClick={generatePaper}><Shuffle size={18} /> Generate Paper</Button>
-          <Button onClick={addQuestion}><Plus size={18} /> Add Question</Button>
+          <Button className="bg-indigo-600 hover:opacity-90" onClick={generatePaper}><Shuffle size={16} /> Generate Mock Paper</Button>
         </div>
       </div>
-      <div className="grid gap-3 md:grid-cols-4">
-        <Card className="flex items-center justify-between"><div><p className="text-sm text-slate-500">Questions</p><p className="text-2xl font-bold">{safeRows.length}</p></div><BookOpenCheck className="text-primary" /></Card>
-        <Card className="flex items-center justify-between"><div><p className="text-sm text-slate-500">Subjects</p><p className="text-2xl font-bold">{subjects.length - 1}</p></div><Layers className="text-emerald-700" /></Card>
-        <Card className="flex items-center justify-between"><div><p className="text-sm text-slate-500">Marks</p><p className="text-2xl font-bold">{totalMarks}</p></div><FileText className="text-amber-700" /></Card>
-        <Card className="flex items-center justify-between"><div><p className="text-sm text-slate-500">Papers</p><p className="text-2xl font-bold">{paperCount}</p></div><Shuffle className="text-indigo-700" /></Card>
-      </div>
-      <Card className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-semibold">Add Question</h2>
-          <Badge>{selectedBank ? `${selectedBank.exam.code} · ${selectedBank.name}` : (examCodes.length ? examCodes.join(", ") : "Local Draft Bank")}</Badge>
-        </div>
-        <div className="grid gap-3 md:grid-cols-3">
-          <Select value={selectedBankId} onChange={(event) => setSelectedBankId(event.target.value)}>
-            <option value="">Local Draft Questions</option>
-            {banks.map((bank) => <option key={bank.id} value={bank.id}>{bank.exam.code} - {bank.name} ({bank._count?.questions ?? 0})</option>)}
-          </Select>
-          <Select value={sourceBankId} onChange={(event) => setSourceBankId(event.target.value)}>
-            <option value="">Choose source bank</option>
-            {banks.filter((bank) => bank.id !== selectedBankId).map((bank) => <option key={bank.id} value={bank.id}>{bank.exam.code} - {bank.name}</option>)}
-          </Select>
-          <Button className="bg-secondary" onClick={importBank}>Import bank into selected exam</Button>
-        </div>
-        <textarea className="min-h-24 w-full rounded-md border border-border bg-background p-3 text-sm" placeholder="Enter question prompt" value={draftPrompt} onChange={(event) => setDraftPrompt(event.target.value)} />
-        <div className="grid gap-3 md:grid-cols-5">
-          <Select value={draftSubject} onChange={(event) => setDraftSubject(event.target.value)}>
-            {subjectOptions.map((item) => <option key={item} value={item}>{item}</option>)}
-          </Select>
-          <Input placeholder="Topic" value={draftTopic} onChange={(event) => setDraftTopic(event.target.value)} />
-          <Select value={draftType} onChange={(event) => setDraftType(event.target.value)}>
-            {questionTypes.filter((item) => item !== "All Types").map((item) => <option key={item} value={item}>{item}</option>)}
-          </Select>
-          <Select value={draftDifficulty} onChange={(event) => setDraftDifficulty(event.target.value)}>
-            {difficulties.filter((item) => item !== "All Difficulties").map((item) => <option key={item} value={item}>{item}</option>)}
-          </Select>
-          <Button onClick={addQuestion}><Plus size={18} /> Save Draft</Button>
-        </div>
-      </Card>
-      <Card className="grid gap-3 md:grid-cols-5">
-        <Input placeholder="Search question" value={search} onChange={(event) => setSearch(event.target.value)} />
-        <Select value={examFilter} onChange={(event) => setExamFilter(event.target.value)}>
-          <option>All Exams</option>
-          {examCodes.map((item) => <option key={item} value={item}>{item}</option>)}
-        </Select>
-        <Select value={subject} onChange={(event) => setSubject(event.target.value)}>
-          {subjects.map((item) => <option key={item} value={item}>{item}</option>)}
-        </Select>
-        <Select value={difficulty} onChange={(event) => setDifficulty(event.target.value)}>
-          {difficulties.map((item) => <option key={item} value={item}>{item}</option>)}
-        </Select>
-        <Select value={type} onChange={(event) => setType(event.target.value)}>
-          {questionTypes.map((item) => <option key={item} value={item}>{item}</option>)}
-        </Select>
-      </Card>
-      <Table>
-        <thead className="bg-muted">
-          <tr>{["Question", "Exam Bank", "Subject", "Topic", "Type", "Difficulty", "Marks", "Negative", "Tags"].map((h) => <th className="p-3" key={h}>{h}</th>)}</tr>
-        </thead>
-        <tbody>
-          {filteredRows.map((q) => (
-            <tr className="border-t border-border align-top" key={q.id ?? q.prompt}>
-              <td className="p-3 font-medium">
-                {questionNumber(q.tags) ? `${questionNumber(q.tags)}. ` : ""}{q.prompt} {q.questionType === "Image MCQ" && <Image className="inline ml-1" size={15} />}
-                {!!q.options?.length && <div className="mt-2 text-xs font-normal text-slate-500">{q.options.map((option) => `${option.isCorrect ? "*" : ""}${option.text}`).join(" | ")}</div>}
-              </td>
-              <td className="p-3"><Badge>{q.bank?.exam.code ?? "Draft"}</Badge><div className="mt-1 text-xs text-slate-500">{q.bank?.name ?? "Local question bank"}</div></td>
-              <td className="p-3">{q.subject.name}</td>
-              <td className="p-3">{q.topic.name}</td>
-              <td className="p-3"><Badge>{q.questionType}</Badge></td>
-              <td className="p-3">{q.difficulty}</td>
-              <td className="p-3">{q.marks}</td>
-              <td className="p-3">{q.negativeMarks}</td>
-              <td className="p-3">{q.tags.filter(t => !t.startsWith("Q")).join(", ")}</td>
-            </tr>
+
+      {/* Grid of Available Question Banks with Assigned Exam details */}
+      <div>
+        <h2 className="text-lg font-bold text-slate-900 mb-3.5">Assigned Question Banks & Examinations</h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {banks.map((bank) => (
+            <Card
+              className={`border transition-all cursor-pointer relative flex flex-col justify-between ${selectedBankId === bank.id ? "border-primary bg-primary/5 shadow-md scale-[1.01]" : "border-border hover:bg-slate-50/50"}`}
+              key={bank.id}
+              onClick={() => setSelectedBankId(bank.id)}
+            >
+              <div>
+                <div className="flex items-center justify-between gap-1.5 mb-2.5">
+                  <Badge className="font-mono text-[9px] bg-slate-100 font-semibold">{bank.exam?.code || "No Exam"}</Badge>
+                  <Badge className="bg-emerald-50 text-emerald-700 border-emerald-100 font-mono text-[9px]">
+                    {bank._count?.questions ?? 0} Qs
+                  </Badge>
+                </div>
+                <h3 className="font-bold text-sm text-slate-800 line-clamp-1">{bank.name}</h3>
+                <p className="text-[10px] text-slate-500 mt-1.5 line-clamp-2">
+                  Assigned to: <strong className="text-slate-700 font-medium">{bank.exam?.name || "Unassigned"}</strong>
+                </p>
+              </div>
+
+              <div className="border-t border-slate-100 pt-2.5 mt-3 text-[10px] flex justify-between items-center text-slate-500">
+                <span>Active Bank</span>
+                {selectedBankId === bank.id && <CheckCircle size={13} className="text-primary" />}
+              </div>
+            </Card>
           ))}
-          {!filteredRows.length && (
-            <tr><td className="p-6 text-center text-slate-500" colSpan={9}>No questions match your filters.</td></tr>
+          {!banks.length && (
+            <div className="col-span-full text-center py-10 text-slate-400 border-2 border-dashed rounded-lg">
+              No question banks found. Please create an examination first.
+            </div>
           )}
-        </tbody>
-      </Table>
+        </div>
+      </div>
+
+      {/* Target selector and Import engine */}
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Dynamic target exam selection & import */}
+        <Card className="border border-border space-y-4">
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+            <ArrowRightLeft className="text-indigo-600" size={18} />
+            <h2 className="font-bold text-slate-900 text-sm">Copy & Import Question Bank</h2>
+          </div>
+
+          <div className="space-y-3.5 text-xs">
+            <div>
+              <label className="block font-semibold text-slate-600 mb-1">1. Choose Source Question Bank (From Existing)</label>
+              <Select value={sourceBankId} onChange={(e) => setSourceBankId(e.target.value)}>
+                <option value="">Select source bank...</option>
+                {banks.map((bank) => (
+                  <option key={bank.id} value={bank.id}>
+                    {bank.exam.code} - {bank.name} ({bank._count?.questions ?? 0} Questions)
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-600 mb-1">2. Select Target Examination (To Import Into)</label>
+              <Select value={selectedExamId || ""} onChange={(e) => setSelectedExamId(e.target.value)}>
+                <option value="">Choose target exam...</option>
+                {exams.map((exam) => (
+                  <option key={exam.id} value={exam.id}>
+                    {exam.code} - {exam.examName || exam.name} ({exam.subject || "No Subject"})
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="bg-slate-50 p-3 rounded-md border border-slate-100 flex flex-col gap-1">
+              <span className="text-[10px] text-slate-400 font-medium">Selected Target Summary:</span>
+              <span className="font-bold text-slate-700">
+                {targetExam ? `${targetExam.code} - ${targetExam.examName || targetExam.name}` : "No Target Exam Selected"}
+              </span>
+            </div>
+
+            <Button
+              className="w-full bg-indigo-600 shadow-md hover:opacity-90 flex items-center justify-center gap-1.5 h-10 font-bold"
+              disabled={!sourceBankId || !selectedExamId}
+              onClick={importBank}
+            >
+              <Copy size={15} /> Copy & Import Questions
+            </Button>
+          </div>
+        </Card>
+
+        {/* Add Question to Selected Bank */}
+        <Card className="border border-border space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <Plus className="text-emerald-600" size={18} />
+              <h2 className="font-bold text-slate-900 text-sm">Add Question to Selected Bank</h2>
+            </div>
+            <Badge className="bg-primary/10 text-primary border-primary/20 font-mono text-[10px]">
+              {selectedBank ? `${selectedBank.exam.code} - ${selectedBank.name}` : "Local Draft"}
+            </Badge>
+          </div>
+
+          <div className="space-y-3.5 text-xs">
+            <div>
+              <label className="block font-semibold text-slate-600 mb-1">Select Question Bank *</label>
+              <Select value={selectedBankId} onChange={(e) => setSelectedBankId(e.target.value)}>
+                <option value="">Choose bank...</option>
+                {banks.map((bank) => (
+                  <option key={bank.id} value={bank.id}>
+                    {bank.exam.code} - {bank.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-600 mb-1">Question Prompt *</label>
+              <textarea
+                className="w-full rounded-md border border-border bg-white dark:bg-slate-900 p-2.5 text-xs h-16 outline-none focus:ring-2 focus:ring-primary/25"
+                placeholder="Enter question prompt..."
+                value={draftPrompt}
+                onChange={(e) => setDraftPrompt(e.target.value)}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold text-slate-600 mb-1">Subject</label>
+                <Select value={draftSubject} onChange={(e) => setDraftSubject(e.target.value)}>
+                  {subjectOptions.map((item) => <option key={item} value={item}>{item}</option>)}
+                </Select>
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-600 mb-1">Topic</label>
+                <Input placeholder="e.g. Algebra" value={draftTopic} onChange={(e) => setDraftTopic(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold text-slate-600 mb-1">Type</label>
+                <Select value={draftType} onChange={(e) => setDraftType(e.target.value)}>
+                  {questionTypes.filter((item) => item !== "All Types").map((item) => <option key={item} value={item}>{item}</option>)}
+                </Select>
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-600 mb-1">Difficulty</label>
+                <Select value={draftDifficulty} onChange={(e) => setDraftDifficulty(e.target.value)}>
+                  {difficulties.filter((item) => item !== "All Difficulties").map((item) => <option key={item} value={item}>{item}</option>)}
+                </Select>
+              </div>
+            </div>
+
+            <Button className="w-full bg-emerald-600 h-10 font-bold" onClick={addQuestion}>
+              <CheckCircle size={15} /> Save Question to Database
+            </Button>
+          </div>
+        </Card>
+      </div>
+
+      {/* Filter and Table view */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-bold text-slate-900">Questions in Selected Bank ({filteredRows.length})</h2>
+
+        <Card className="flex flex-wrap items-center gap-3.5 py-3">
+          <div className="flex-1 min-w-[200px]">
+            <Input placeholder="Search question..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <div className="w-[150px]">
+            <Select value={examFilter} onChange={(e) => setExamFilter(e.target.value)}>
+              <option>All Exams</option>
+              {examCodes.map((item) => <option key={item} value={item}>{item}</option>)}
+            </Select>
+          </div>
+          <div className="w-[150px]">
+            <Select value={subject} onChange={(e) => setSubject(e.target.value)}>
+              {subjects.map((item) => <option key={item} value={item}>{item}</option>)}
+            </Select>
+          </div>
+          <div className="w-[140px]">
+            <Select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
+              {difficulties.map((item) => <option key={item} value={item}>{item}</option>)}
+            </Select>
+          </div>
+          <div className="w-[140px]">
+            <Select value={type} onChange={(e) => setType(e.target.value)}>
+              {questionTypes.map((item) => <option key={item} value={item}>{item}</option>)}
+            </Select>
+          </div>
+        </Card>
+
+        <Table>
+          <thead className="bg-muted/80 font-bold text-slate-700">
+            <tr>
+              <th className="p-3.5">Question Prompt & Answers</th>
+              <th className="p-3.5">Assigned Exam</th>
+              <th className="p-3.5">Subject & Topic</th>
+              <th className="p-3.5">Type</th>
+              <th className="p-3.5">Difficulty</th>
+              <th className="p-3.5 text-center">Marks</th>
+              <th className="p-3.5 text-center">Neg. Mark</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {filteredRows.map((q) => (
+              <tr className="hover:bg-slate-50/50 align-top" key={q.id ?? q.prompt}>
+                <td className="p-3.5 font-medium max-w-[400px]">
+                  <div className="text-slate-800 leading-snug">
+                    {questionNumber(q.tags) ? `${questionNumber(q.tags)}. ` : ""}{q.prompt}
+                  </div>
+                  {!!q.options?.length && (
+                    <div className="mt-2.5 flex flex-wrap gap-2 text-xs">
+                      {q.options.map((option, idx) => (
+                        <span
+                          key={option.id}
+                          className={`px-2 py-1 rounded border text-[10px] ${option.isCorrect ? "bg-emerald-50 border-emerald-300 text-emerald-800 font-bold" : "bg-slate-50 border-slate-200 text-slate-500"}`}
+                        >
+                          {String.fromCharCode(65 + idx)}. {option.text}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </td>
+                <td className="p-3.5">
+                  <Badge className="font-mono text-[9px] bg-slate-100 font-semibold">{q.bank?.exam.code ?? "Draft"}</Badge>
+                  <div className="mt-1 text-[10px] text-slate-400 font-medium">{q.bank?.name ?? "Local Draft"}</div>
+                </td>
+                <td className="p-3.5">
+                  <div className="text-slate-700 font-medium">{q.subject.name}</div>
+                  <div className="mt-0.5 text-[10px] text-slate-500">{q.topic.name}</div>
+                </td>
+                <td className="p-3.5 font-medium"><Badge>{q.questionType}</Badge></td>
+                <td className="p-3.5 text-slate-600 font-medium">{q.difficulty}</td>
+                <td className="p-3.5 text-center font-bold text-slate-800 font-mono">{q.marks}</td>
+                <td className="p-3.5 text-center text-rose-600 font-bold font-mono">-{q.negativeMarks}</td>
+              </tr>
+            ))}
+            {!filteredRows.length && (
+              <tr>
+                <td className="p-8 text-center text-slate-400" colSpan={7}>
+                  No questions match your filter criteria.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </Table>
+      </div>
     </section>
   );
 }
