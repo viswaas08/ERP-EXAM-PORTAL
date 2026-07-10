@@ -55,12 +55,15 @@ export function CandidateDashboard() {
 
   const applicationsRef = useRef<CandidateApplication[]>([]);
 
-  async function loadDashboard(targetAppNo?: string) {
+  async function loadDashboard(targetAppNo?: string, targetExamId?: string) {
     const appNo = targetAppNo || selectedApplicationNo;
-    // Resolve examId from the current applications list (ref) rather than stale dashboard state
-    const knownApps = applicationsRef.current;
-    const targetApp = knownApps.find((a) => a.applicationNo === appNo);
-    const examId = targetApp?.examination.id || "";
+    // Use explicit examId if provided, otherwise look it up from the applications ref
+    let examId = targetExamId || "";
+    if (!examId && appNo) {
+      const knownApps = applicationsRef.current;
+      const targetApp = knownApps.find((a) => a.applicationNo === appNo);
+      examId = targetApp?.examination.id || "";
+    }
     const url = examId ? `/candidate/dashboard?examId=${encodeURIComponent(examId)}` : "/candidate/dashboard";
 
     api<CandidateDashboardData>(url)
@@ -82,6 +85,17 @@ export function CandidateDashboard() {
         });
       })
       .catch(() => setNotice("Login as a candidate to view dashboard."));
+  }
+
+  function handleExamSwitch(appNo: string) {
+    // Find the examId from the current applications list
+    const apps = applicationsRef.current;
+    const targetApp = apps.find((a) => a.applicationNo === appNo);
+    const examId = targetApp?.examination.id || "";
+    setSelectedApplicationNo(appNo);
+    // Clear stale attempts immediately so the UI doesn't show old exam data
+    setDashboard((prev) => prev ? { ...prev, attempts: [] } : prev);
+    void loadDashboard(appNo, examId);
   }
 
   // Initial load
@@ -213,7 +227,7 @@ export function CandidateDashboard() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {applications.length > 0 && (
-              <Select className="max-w-xs" value={selectedApplication?.applicationNo ?? ""} onChange={(event) => { const appNo = event.target.value; setSelectedApplicationNo(appNo); void loadDashboard(appNo); }}>
+              <Select className="max-w-xs" value={selectedApplication?.applicationNo ?? ""} onChange={(event) => handleExamSwitch(event.target.value)}>
                 {applications.map((item) => (
                   <option key={item.applicationNo} value={item.applicationNo}>
                     {item.examination.code} - {item.applicationNo} - {item.hallTicket ? "Hall Ticket Ready" : item.status}
