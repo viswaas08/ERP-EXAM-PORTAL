@@ -53,28 +53,47 @@ export function CandidateDashboard() {
   const [selectedApplicationNo, setSelectedApplicationNo] = usePersistentState("examPortal.candidateDashboard.selectedApplicationNo", "");
   const [calculationPolicy, setCalculationPolicy] = useState("latest"); // "latest" | "highest"
 
-  async function loadDashboard() {
-    api<CandidateDashboardData>("/candidate/dashboard")
+  async function loadDashboard(targetAppNo?: string) {
+    const appNo = targetAppNo || selectedApplicationNo;
+    const currentApps = dashboard?.applications ?? [];
+    const targetApp = currentApps.find((a) => a.applicationNo === appNo);
+    const examId = targetApp?.examination.id || "";
+    const url = examId ? `/candidate/dashboard?examId=${encodeURIComponent(examId)}` : "/candidate/dashboard";
+
+    api<CandidateDashboardData>(url)
       .then((data) => {
         setDashboard(data);
-        setPhase(data.phase);
-        const applications = data.applications ?? (data.application ? [data.application] : []);
+        if (data.phase) {
+          setPhase(data.phase);
+          setSelectedPhaseName(data.phase.activePhase?.name ?? "");
+        }
+        const apps = data.applications ?? (data.application ? [data.application] : []);
         setSelectedApplicationNo((current) => {
-          const currentApplication = applications.find((item) => item.applicationNo === current);
-          if (currentApplication) return current;
-          return applications.find((item) => item.hallTicket)?.applicationNo || applications[0]?.applicationNo || "";
+          const activeAppNo = targetAppNo || current;
+          const currentApplication = apps.find((item) => item.applicationNo === activeAppNo);
+          if (currentApplication) return activeAppNo;
+          return apps.find((item) => item.hallTicket)?.applicationNo || apps[0]?.applicationNo || "";
         });
-        setSelectedPhaseName(data.phase.activePhase?.name ?? "");
       })
       .catch(() => setNotice("Login as a candidate to view dashboard."));
   }
 
-  // Poll candidate status in real-time (every 1.5 seconds) for instant updates
   useEffect(() => {
     void loadDashboard();
-    const refresh = window.setInterval(() => void loadDashboard(), 1500);
-    return () => window.clearInterval(refresh);
   }, []);
+
+  useEffect(() => {
+    if (selectedApplicationNo) {
+      void loadDashboard(selectedApplicationNo);
+    }
+  }, [selectedApplicationNo]);
+
+  useEffect(() => {
+    const refresh = window.setInterval(() => {
+      void loadDashboard(selectedApplicationNo);
+    }, 1500);
+    return () => window.clearInterval(refresh);
+  }, [selectedApplicationNo]);
 
   const applications = dashboard?.applications ?? (dashboard?.application ? [dashboard.application] : []);
   const selectedApplication = applications.find((item) => item.applicationNo === selectedApplicationNo) ?? applications[0] ?? null;

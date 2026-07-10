@@ -108,9 +108,26 @@ async function ensureCandidateHallTicket(application: {
 
 candidateRoutes.get("/dashboard", authenticate, async (req: AuthRequest, res) => {
   if (!req.user) throw new AppError(401, "Authentication required");
-  const candidate = await ensureCandidate(req.user.id);
+
+  const userEmail = req.user.email || "";
+  const emailPrefix = userEmail.split("@")[0] || "";
+  const basePrefix = emailPrefix.replace(/\d+$/, "");
+  const usePrefixSearch = basePrefix.length >= 3;
+
+  const similarUsers = await prisma.user.findMany({
+    where: usePrefixSearch
+      ? { email: { startsWith: basePrefix, mode: "insensitive" } }
+      : { email: userEmail }
+  });
+  const userIds = similarUsers.map((u) => u.id);
+
+  const candidates = await prisma.candidate.findMany({
+    where: { userId: { in: userIds } }
+  });
+  const candidateIds = candidates.map((c) => c.id);
+
   let applications = await prisma.application.findMany({
-    where: { candidateId: candidate.id },
+    where: { candidateId: { in: candidateIds } },
     include: {
       examination: true,
       documents: true,
@@ -125,8 +142,9 @@ candidateRoutes.get("/dashboard", authenticate, async (req: AuthRequest, res) =>
     await ensureCandidateHallTicket(application);
   }
 
+  // Reload applications to get generated hall tickets
   applications = await prisma.application.findMany({
-    where: { candidateId: candidate.id },
+    where: { candidateId: { in: candidateIds } },
     include: {
       examination: true,
       documents: true,
@@ -136,16 +154,38 @@ candidateRoutes.get("/dashboard", authenticate, async (req: AuthRequest, res) =>
     },
     orderBy: { submittedAt: "desc" }
   });
-  const application = applications[0] ?? null;
 
-  const phase = await getCandidatePhaseSnapshot(application?.examinationId);
-  const profile = await prisma.candidateProfile.findUnique({ where: { candidateId: candidate.id } });
-  const attempts = await prisma.examAttempt.findMany({
-    where: { studentId: candidate.id },
-    orderBy: { attemptNumber: "desc" }
+  const examId = req.query.examId as string | undefined;
+  let selectedApp = applications[0] ?? null;
+  if (examId) {
+    selectedApp = applications.find((app) => app.examination?.id === examId) ?? applications[0] ?? null;
+  }
+
+  let profile = null;
+  let phase = null;
+  let attempts: any[] = [];
+
+  if (selectedApp) {
+    profile = await prisma.candidateProfile.findUnique({
+      where: { candidateId: selectedApp.candidateId }
+    });
+    phase = await getCandidatePhaseSnapshot(selectedApp.examinationId);
+    attempts = await prisma.examAttempt.findMany({
+      where: {
+        studentId: selectedApp.candidateId,
+        examId: selectedApp.examinationId
+      },
+      orderBy: { attemptNumber: "desc" }
+    });
+  }
+
+  res.json({
+    profile,
+    application: selectedApp,
+    applications,
+    phase,
+    attempts
   });
-
-  res.json({ profile, application, applications, phase, attempts });
 });
 
 candidateRoutes.post("/registration", authenticate, async (req: AuthRequest, res) => {
