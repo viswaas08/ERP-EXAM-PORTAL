@@ -107,10 +107,22 @@ questionRoutes.post("/banks/import", authenticate, async (req: AuthRequest, res)
 
 questionRoutes.get("/online/active", authenticate, async (req: AuthRequest, res) => {
   if (!req.user) throw new AppError(401, "Authentication required");
-  const examId = String(req.query.examId || "") || undefined;
-  const snapshot = await getCandidatePhaseSnapshot(examId);
+  let examId = String(req.query.examId || "").trim();
 
   const candidate = await prisma.candidate.findUnique({ where: { userId: req.user.id } });
+  if (!examId && candidate) {
+    const latestApp = await prisma.application.findFirst({
+      where: { candidateId: candidate.id },
+      orderBy: { submittedAt: "desc" },
+      select: { examinationId: true }
+    });
+    if (latestApp) {
+      examId = latestApp.examinationId;
+    }
+  }
+
+  const snapshot = await getCandidatePhaseSnapshot(examId || undefined);
+
   const application = candidate ? await prisma.application.findFirst({
     where: { candidateId: candidate.id, examinationId: snapshot.exam.id, status: { in: ["APPROVED", "PENDING"] } },
     orderBy: { submittedAt: "desc" }
@@ -160,11 +172,24 @@ questionRoutes.get("/online/active", authenticate, async (req: AuthRequest, res)
 
 questionRoutes.post("/online/start", authenticate, async (req: AuthRequest, res) => {
   if (!req.user) throw new AppError(401, "Authentication required");
-  const snapshot = await getCandidatePhaseSnapshot(String(req.body.examId || "") || undefined);
-  if (!snapshot.access.onlineExam) throw new AppError(400, "Online examination is not active");
-
+  
   const candidate = await prisma.candidate.findUnique({ where: { userId: req.user.id } });
   if (!candidate) throw new AppError(404, "Candidate profile not found");
+
+  let examId = String(req.body.examId || "").trim();
+  if (!examId) {
+    const latestApp = await prisma.application.findFirst({
+      where: { candidateId: candidate.id },
+      orderBy: { submittedAt: "desc" },
+      select: { examinationId: true }
+    });
+    if (latestApp) {
+      examId = latestApp.examinationId;
+    }
+  }
+
+  const snapshot = await getCandidatePhaseSnapshot(examId || undefined);
+  if (!snapshot.access.onlineExam) throw new AppError(400, "Online examination is not active");
 
   const application = await prisma.application.findFirst({
     where: { candidateId: candidate.id, examinationId: snapshot.exam.id, status: { in: ["APPROVED", "PENDING"] } },
@@ -215,11 +240,24 @@ questionRoutes.post("/online/start", authenticate, async (req: AuthRequest, res)
 
 questionRoutes.post("/online/submit", authenticate, async (req: AuthRequest, res) => {
   if (!req.user) throw new AppError(401, "Authentication required");
-  const snapshot = await getCandidatePhaseSnapshot(String(req.body.examId || "") || undefined);
-  if (!snapshot.access.onlineExam) throw new AppError(400, "Online examination is not active");
 
   const candidate = await prisma.candidate.findUnique({ where: { userId: req.user.id } });
   if (!candidate) throw new AppError(404, "Candidate profile not found");
+
+  let examId = String(req.body.examId || "").trim();
+  if (!examId) {
+    const latestApp = await prisma.application.findFirst({
+      where: { candidateId: candidate.id },
+      orderBy: { submittedAt: "desc" },
+      select: { examinationId: true }
+    });
+    if (latestApp) {
+      examId = latestApp.examinationId;
+    }
+  }
+
+  const snapshot = await getCandidatePhaseSnapshot(examId || undefined);
+  if (!snapshot.access.onlineExam) throw new AppError(400, "Online examination is not active");
 
   const application = await prisma.application.findFirst({
     where: { candidateId: candidate.id, examinationId: snapshot.exam.id, status: { in: ["APPROVED", "PENDING"] } },
