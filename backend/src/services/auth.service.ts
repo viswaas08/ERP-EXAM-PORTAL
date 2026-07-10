@@ -8,7 +8,7 @@ import { signAccessToken, signRefreshToken } from "../utils/tokens.js";
 export async function login(email: string, password: string) {
   const user = await prisma.user.findUnique({ where: { email }, include: { role: { include: { permissions: true } } } });
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) throw new AppError(401, "Invalid credentials");
-  const payload = { id: user.id, role: user.role.name, permissions: user.role.permissions.map((p) => p.code) };
+  const payload = { id: user.id, email: user.email, role: user.role.name, permissions: user.role.permissions.map((p) => p.code) };
   return {
     user: { id: user.id, name: user.name, email: user.email, role: user.role.name },
     accessToken: signAccessToken(payload),
@@ -53,7 +53,7 @@ export async function refreshAccessToken(refreshToken: string) {
   const user = await prisma.user.findUnique({ where: { id: payload.id }, include: { role: { include: { permissions: true } } } });
   if (!user) throw new AppError(401, "Invalid refresh token");
 
-  const accessPayload = { id: user.id, role: user.role.name, permissions: user.role.permissions.map((permission) => permission.code) };
+  const accessPayload = { id: user.id, email: user.email, role: user.role.name, permissions: user.role.permissions.map((permission) => permission.code) };
   return {
     accessToken: signAccessToken(accessPayload),
     user: { id: user.id, name: user.name, email: user.email, role: user.role.name }
