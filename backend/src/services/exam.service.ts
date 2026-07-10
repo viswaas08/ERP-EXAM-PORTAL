@@ -30,7 +30,7 @@ function buildPhaseSchedule(startDate?: string, endDate?: string) {
 
 export function listLiveExams() {
   return prisma.examination.findMany({
-    where: { status: { in: ["OPEN", "ACTIVE"] } },
+    where: { status: { in: ["OPEN", "ACTIVE", "PUBLISHED", "ONLINE"] } },
     include: { workflowPhases: { orderBy: { opensAt: "asc" } }, _count: { select: { applications: true, questionBanks: true, centres: true } } },
     orderBy: { createdAt: "desc" }
   });
