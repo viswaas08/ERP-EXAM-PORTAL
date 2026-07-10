@@ -18,7 +18,10 @@ export function authorize(...permissions: string[]) {
   return (req: AuthRequest, _res: Response, next: NextFunction) => {
     if (req.user?.role === "Super Admin") return next();
     const hasPermission = permissions.some((p) => req.user?.permissions?.includes(p));
-    if (!hasPermission) throw new AppError(403, "Permission denied");
+    if (!hasPermission) {
+      console.warn(`[AUTH] Access denied. User: ${req.user?.id}, Role: ${req.user?.role}, Permissions: ${JSON.stringify(req.user?.permissions)}, Required: ${JSON.stringify(permissions)}`);
+      throw new AppError(403, "Permission denied");
+    }
     next();
   };
 }

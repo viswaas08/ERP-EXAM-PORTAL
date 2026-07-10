@@ -14,6 +14,20 @@ async function main() {
     console.log("Examinations details:");
     console.log(JSON.stringify(exams, null, 2));
 
+    const users = await prisma.user.findMany({
+      include: {
+        role: {
+          include: {
+            permissions: true
+          }
+        }
+      }
+    });
+    console.log("All users in database:");
+    for (const u of users) {
+      console.log(`- User: ${u.email} | Role: ${u.role.name} | Permissions: ${u.role.permissions.map(p => p.code).join(", ")}`);
+    }
+
     const candidatesCount = await prisma.candidate.count();
     console.log(`Candidates: ${candidatesCount}`);
 
