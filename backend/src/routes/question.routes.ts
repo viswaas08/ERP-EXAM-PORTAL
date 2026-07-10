@@ -105,9 +105,25 @@ questionRoutes.post("/banks/import", authenticate, async (req: AuthRequest, res)
   res.status(201).json(imported);
 });
 
-questionRoutes.get("/online/active", async (req, res) => {
+questionRoutes.get("/online/active", authenticate, async (req: AuthRequest, res) => {
+  if (!req.user) throw new AppError(401, "Authentication required");
   const examId = String(req.query.examId || "") || undefined;
   const snapshot = await getCandidatePhaseSnapshot(examId);
+
+  const candidate = await prisma.candidate.findUnique({ where: { userId: req.user.id } });
+  const application = candidate ? await prisma.application.findFirst({
+    where: { candidateId: candidate.id, examinationId: snapshot.exam.id, status: { in: ["APPROVED", "PENDING"] } },
+    orderBy: { submittedAt: "desc" }
+  }) : null;
+
+  let activeSession = null;
+  if (application) {
+    activeSession = await prisma.examSession.findFirst({
+      where: { applicationId: application.id, examId: snapshot.exam.id, status: "STARTED" },
+      orderBy: { startedAt: "desc" }
+    });
+  }
+
   const questions = await prisma.question.findMany({
     where: { bank: { examId: snapshot.exam.id } },
     include: {
@@ -121,6 +137,10 @@ questionRoutes.get("/online/active", async (req, res) => {
     exam: snapshot.exam,
     activePhase: snapshot.activePhase,
     access: snapshot.access,
+    activeSession: activeSession ? {
+      sessionId: activeSession.id,
+      startedAt: activeSession.startedAt ?? new Date()
+    } : null,
     questions: questions
       .sort((a, b) => questionNumber(a.tags) - questionNumber(b.tags))
       .map((question) => ({

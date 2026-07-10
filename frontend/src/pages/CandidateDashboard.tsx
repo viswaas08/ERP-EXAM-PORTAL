@@ -320,7 +320,7 @@ export function CandidateDashboard() {
                   </p>
                 </div>
                 {phase.access.onlineExam && attemptsRemaining > 0 ? (
-                  <Link to="/exam" className="w-full">
+                  <Link to={`/exam?examId=${selectedApplication?.examination.id || ""}`} className="w-full">
                     <Button className="bg-emerald-600 w-full hover:opacity-90">Open Exam Console</Button>
                   </Link>
                 ) : (

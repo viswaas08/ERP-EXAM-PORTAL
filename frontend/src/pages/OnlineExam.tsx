@@ -1,6 +1,6 @@
 import { Flag, LogOut, Save, Send } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Button, Card } from "../components/ui";
 import { fallbackPhase, type CandidatePhaseSnapshot } from "../lib/workflow";
@@ -41,6 +41,10 @@ type OnlinePaper = {
   activePhase?: CandidatePhaseSnapshot["activePhase"];
   access: CandidatePhaseSnapshot["access"];
   questions: OnlineQuestion[];
+  activeSession?: {
+    sessionId: string;
+    startedAt: string;
+  } | null;
 };
 
 type OnlineStartResponse = {
@@ -65,6 +69,8 @@ function formatClock(totalSeconds: number) {
 export function OnlineExam() {
   const { logout } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const examId = searchParams.get("examId") || "";
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [marked, setMarked] = useState<string[]>([]);
@@ -90,21 +96,34 @@ export function OnlineExam() {
 
   // Load Paper and Attempts
   const loadPaperAndAttempts = () => {
-    api<OnlinePaper>("/questions/online/active")
+    const url = examId ? `/questions/online/active?examId=${encodeURIComponent(examId)}` : "/questions/online/active";
+    api<OnlinePaper>(url)
       .then((data) => {
         setPaper(data);
         setPhase({ exam: data.exam, activePhase: data.activePhase, access: data.access });
         
-        const examId = data.exam.id;
-        const prefix = `examPortal.onlineExam.v3.${examId}.`;
+        const paperExamId = data.exam.id;
+        const prefix = `examPortal.onlineExam.v3.${paperExamId}.`;
         
-        setCurrentIndex(Number(localStorage.getItem(prefix + "currentIndex") || "0"));
-        setAnswers(JSON.parse(localStorage.getItem(prefix + "answers") || "{}"));
-        setMarked(JSON.parse(localStorage.getItem(prefix + "marked") || "[]"));
-        setSubmitted(localStorage.getItem(prefix + "submitted") === "true");
-        setExamStarted(localStorage.getItem(prefix + "started") === "true");
-        setSessionId(localStorage.getItem(prefix + "sessionId") || "");
-        setStartedAt(localStorage.getItem(prefix + "startedAt") || "");
+        const serverActiveSession = data.activeSession;
+
+        if (serverActiveSession) {
+          setExamStarted(true);
+          setSubmitted(false);
+          setSessionId(serverActiveSession.sessionId);
+          setStartedAt(serverActiveSession.startedAt);
+          setCurrentIndex(Number(localStorage.getItem(prefix + "currentIndex") || "0"));
+          setAnswers(JSON.parse(localStorage.getItem(prefix + "answers") || "{}"));
+          setMarked(JSON.parse(localStorage.getItem(prefix + "marked") || "[]"));
+        } else {
+          setExamStarted(false);
+          setSubmitted(false);
+          setSessionId("");
+          setStartedAt("");
+          setAnswers({});
+          setMarked([]);
+          setCurrentIndex(0);
+        }
 
         // Fetch dashboard data for attempts count
         api<DashboardData>(`/candidate/dashboard?examId=${encodeURIComponent(examId)}`)
@@ -129,8 +148,8 @@ export function OnlineExam() {
 
   useEffect(() => {
     if (!paper) return;
-    const examId = paper.exam.id;
-    const prefix = `examPortal.onlineExam.v3.${examId}.`;
+    const paperExamId = paper.exam.id;
+    const prefix = `examPortal.onlineExam.v3.${paperExamId}.`;
     localStorage.setItem(prefix + "currentIndex", String(currentIndex));
     localStorage.setItem(prefix + "answers", JSON.stringify(answers));
     localStorage.setItem(prefix + "marked", JSON.stringify(marked));
@@ -148,7 +167,8 @@ export function OnlineExam() {
   useEffect(() => {
     if (examStarted) return; // Stop polling while taking exam to avoid disruptions
     const timer = setInterval(() => {
-      api<OnlinePaper>("/questions/online/active")
+      const url = examId ? `/questions/online/active?examId=${encodeURIComponent(examId)}` : "/questions/online/active";
+      api<OnlinePaper>(url)
         .then((data) => {
           setPhase({ exam: data.exam, activePhase: data.activePhase, access: data.access });
           setPaper(data);
@@ -156,7 +176,7 @@ export function OnlineExam() {
         .catch(() => undefined);
     }, 1500);
     return () => clearInterval(timer);
-  }, [examStarted]);
+  }, [examStarted, examId]);
 
   useEffect(() => {
     if (!paper || !examStarted || !startedAt || submitted) {
@@ -292,6 +312,13 @@ export function OnlineExam() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
+          {!examStarted && (
+            <Link to="/candidate">
+              <Button className="bg-slate-100 text-slate-700 hover:bg-slate-200 h-9">
+                Dashboard
+              </Button>
+            </Link>
+          )}
           <div className={`rounded-md px-4 py-2 font-bold font-mono text-white text-sm shadow-sm ${remainingSeconds <= 300 && examStarted ? "bg-destructive animate-pulse" : "bg-slate-800"}`}>
             {formatClock(remainingSeconds || (paper?.exam.durationMinutes ?? 0) * 60)}
           </div>
@@ -372,15 +399,25 @@ export function OnlineExam() {
               </div>
 
               <div className="mt-6 flex flex-wrap gap-2 pt-4 border-t border-slate-100">
-                <Button className="bg-emerald-600 shadow-sm" disabled={submitted || !examStarted} onClick={saveAndNext}>
-                  Save & Next
-                </Button>
-                <Button className="bg-slate-100 text-slate-700 hover:bg-slate-200" disabled={submitted || !examStarted} onClick={markForReview}>
-                  {marked.includes(currentQuestion.id) ? "Unmark Review" : "Mark For Review"}
-                </Button>
-                <Button className="bg-destructive hover:opacity-90 ml-auto" disabled={submitted || !examStarted} onClick={submitExam}>
-                  Submit Attempt
-                </Button>
+                {submitted ? (
+                  <Link to="/candidate">
+                    <Button className="bg-slate-800 text-white shadow-sm hover:opacity-90">
+                      Back to Dashboard
+                    </Button>
+                  </Link>
+                ) : (
+                  <>
+                    <Button className="bg-emerald-600 shadow-sm" disabled={submitted || !examStarted} onClick={saveAndNext}>
+                      Save & Next
+                    </Button>
+                    <Button className="bg-slate-100 text-slate-700 hover:bg-slate-200" disabled={submitted || !examStarted} onClick={markForReview}>
+                      {marked.includes(currentQuestion.id) ? "Unmark Review" : "Mark For Review"}
+                    </Button>
+                    <Button className="bg-destructive hover:opacity-90 ml-auto" disabled={submitted || !examStarted} onClick={submitExam}>
+                      Submit Attempt
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           )}
