@@ -198,6 +198,32 @@ export function QuestionBank() {
     }
   }
 
+  async function assignBank() {
+    if (!sourceBankId) {
+      setNotice("Choose a question bank to assign.");
+      return;
+    }
+
+    if (!selectedExamId) {
+      setNotice("Select a target examination for assignment.");
+      return;
+    }
+
+    try {
+      const updated = await api<QuestionBankSummary>(`/questions/banks/${sourceBankId}/assign`, {
+        method: "PATCH",
+        body: JSON.stringify({ targetExamId: selectedExamId })
+      });
+      setBanks((current) => current.map((bank) => bank.id === updated.id ? updated : bank));
+      setSelectedBankId(updated.id);
+      setNotice(`Assigned bank "${updated.name}" successfully to ${updated.exam.code || "target exam"}.`);
+      await loadQuestions(updated.id);
+      await loadBanks();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not assign the question bank.");
+    }
+  }
+
   async function addQuestion() {
     if (!selectedBankId) {
       setNotice("Select a question bank before creating a question.");
@@ -353,13 +379,22 @@ export function QuestionBank() {
               </span>
             </div>
 
-            <Button
-              className="w-full bg-indigo-600 shadow-md hover:opacity-90 flex items-center justify-center gap-1.5 h-10 font-bold"
-              disabled={!sourceBankId || !selectedExamId}
-              onClick={importBank}
-            >
-              <Copy size={15} /> Copy & Import Questions
-            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                className="bg-indigo-600 shadow-md hover:opacity-90 flex items-center justify-center gap-1.5 h-10 font-bold"
+                disabled={!sourceBankId || !selectedExamId}
+                onClick={importBank}
+              >
+                <Copy size={15} /> Copy & Import
+              </Button>
+              <Button
+                className="bg-slate-800 shadow-md hover:opacity-90 flex items-center justify-center gap-1.5 h-10 font-bold"
+                disabled={!sourceBankId || !selectedExamId}
+                onClick={assignBank}
+              >
+                <ArrowRightLeft size={15} /> Assign to Exam
+              </Button>
+            </div>
           </div>
         </Card>
 

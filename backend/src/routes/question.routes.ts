@@ -11,6 +11,26 @@ function questionNumber(tags: string[]) {
   return tag ? Number(tag.slice(1)) : 0;
 }
 
+async function getCandidateIds(user: { id: string; email?: string }) {
+  const userEmail = user.email || "";
+  const emailPrefix = userEmail.split("@")[0] || "";
+  const basePrefix = emailPrefix.replace(/\d+$/, "");
+  const usePrefixSearch = basePrefix.length >= 3;
+
+  const similarUsers = await prisma.user.findMany({
+    where: usePrefixSearch
+      ? { email: { startsWith: basePrefix, mode: "insensitive" } }
+      : { email: userEmail }
+  });
+  const userIds = similarUsers.map((u) => u.id);
+
+  const candidates = await prisma.candidate.findMany({
+    where: { userId: { in: userIds } },
+    select: { id: true }
+  });
+  return candidates.map((c) => c.id);
+}
+
 questionRoutes.get("/bank", authenticate, async (_req, res) => {
   const bankId = String(_req.query.bankId || "");
   const examId = String(_req.query.examId || "");
@@ -63,6 +83,24 @@ questionRoutes.post("/banks/import", authenticate, async (req: AuthRequest, res)
   const targetExam = await prisma.examination.findUnique({ where: { id: targetExamId } });
   if (!targetExam) throw new AppError(404, "Target examination not found");
 
+  // Enforce one question bank limit
+  const existingBanks = await prisma.questionBank.findMany({
+    where: { examId: targetExamId },
+    include: { _count: { select: { questions: true } } }
+  });
+
+  if (existingBanks.length > 0) {
+    const withQuestions = existingBanks.filter((b) => b._count.questions > 0);
+    if (withQuestions.length > 0) {
+      throw new AppError(400, "The target examination already has an assigned question bank with questions. Only one question bank can be assigned per exam.");
+    } else {
+      // Clean up empty banks
+      await prisma.questionBank.deleteMany({
+        where: { id: { in: existingBanks.map((b) => b.id) } }
+      });
+    }
+  }
+
   const imported = await prisma.$transaction(async (tx) => {
     const bank = await tx.questionBank.create({
       data: {
@@ -105,14 +143,57 @@ questionRoutes.post("/banks/import", authenticate, async (req: AuthRequest, res)
   res.status(201).json(imported);
 });
 
+questionRoutes.patch("/banks/:id/assign", authenticate, async (req: AuthRequest, res) => {
+  if (!req.user) throw new AppError(401, "Authentication required");
+  const bankId = String(req.params.id);
+  const targetExamId = String(req.body.targetExamId || "");
+
+  if (!targetExamId) throw new AppError(400, "Target examination is required");
+
+  const bank = await prisma.questionBank.findUnique({
+    where: { id: bankId }
+  });
+  if (!bank) throw new AppError(404, "Question bank not found");
+
+  const targetExam = await prisma.examination.findUnique({ where: { id: targetExamId } });
+  if (!targetExam) throw new AppError(404, "Target examination not found");
+
+  // Enforce one question bank limit
+  const existingBanks = await prisma.questionBank.findMany({
+    where: { examId: targetExamId },
+    include: { _count: { select: { questions: true } } }
+  });
+
+  const otherBanks = existingBanks.filter((b) => b.id !== bankId);
+  if (otherBanks.length > 0) {
+    const withQuestions = otherBanks.filter((b) => b._count.questions > 0);
+    if (withQuestions.length > 0) {
+      throw new AppError(400, "The target examination already has an assigned question bank with questions. Only one question bank can be assigned per exam.");
+    } else {
+      // Clean up empty banks
+      await prisma.questionBank.deleteMany({
+        where: { id: { in: otherBanks.map((b) => b.id) } }
+      });
+    }
+  }
+
+  const updated = await prisma.questionBank.update({
+    where: { id: bankId },
+    data: { examId: targetExamId },
+    include: { exam: true, _count: { select: { questions: true } } }
+  });
+
+  res.json(updated);
+});
+
 questionRoutes.get("/online/active", authenticate, async (req: AuthRequest, res) => {
   if (!req.user) throw new AppError(401, "Authentication required");
   let examId = String(req.query.examId || "").trim();
 
-  const candidate = await prisma.candidate.findUnique({ where: { userId: req.user.id } });
-  if (!examId && candidate) {
+  const candidateIds = await getCandidateIds(req.user);
+  if (!examId && candidateIds.length > 0) {
     const latestApp = await prisma.application.findFirst({
-      where: { candidateId: candidate.id },
+      where: { candidateId: { in: candidateIds } },
       orderBy: { submittedAt: "desc" },
       select: { examinationId: true }
     });
@@ -123,8 +204,8 @@ questionRoutes.get("/online/active", authenticate, async (req: AuthRequest, res)
 
   const snapshot = await getCandidatePhaseSnapshot(examId || undefined);
 
-  const application = candidate ? await prisma.application.findFirst({
-    where: { candidateId: candidate.id, examinationId: snapshot.exam.id, status: { in: ["APPROVED", "PENDING"] } },
+  const application = candidateIds.length > 0 ? await prisma.application.findFirst({
+    where: { candidateId: { in: candidateIds }, examinationId: snapshot.exam.id, status: { in: ["APPROVED", "PENDING"] } },
     orderBy: { submittedAt: "desc" }
   }) : null;
 
@@ -145,6 +226,15 @@ questionRoutes.get("/online/active", authenticate, async (req: AuthRequest, res)
     }
   });
 
+  // attempts remaining
+  let attemptsRemaining = snapshot.exam.maximumAttempts || 1;
+  if (application) {
+    const attemptCount = await prisma.examAttempt.count({
+      where: { studentId: application.candidateId, examId: snapshot.exam.id }
+    });
+    attemptsRemaining = Math.max(0, (snapshot.exam.maximumAttempts || 1) - attemptCount);
+  }
+
   res.json({
     exam: snapshot.exam,
     activePhase: snapshot.activePhase,
@@ -153,6 +243,7 @@ questionRoutes.get("/online/active", authenticate, async (req: AuthRequest, res)
       sessionId: activeSession.id,
       startedAt: activeSession.startedAt ?? new Date()
     } : null,
+    attemptsRemaining,
     questions: questions
       .sort((a, b) => questionNumber(a.tags) - questionNumber(b.tags))
       .map((question) => ({
@@ -173,13 +264,13 @@ questionRoutes.get("/online/active", authenticate, async (req: AuthRequest, res)
 questionRoutes.post("/online/start", authenticate, async (req: AuthRequest, res) => {
   if (!req.user) throw new AppError(401, "Authentication required");
   
-  const candidate = await prisma.candidate.findUnique({ where: { userId: req.user.id } });
-  if (!candidate) throw new AppError(404, "Candidate profile not found");
+  const candidateIds = await getCandidateIds(req.user);
+  if (candidateIds.length === 0) throw new AppError(404, "Candidate profile not found");
 
   let examId = String(req.body.examId || "").trim();
   if (!examId) {
     const latestApp = await prisma.application.findFirst({
-      where: { candidateId: candidate.id },
+      where: { candidateId: { in: candidateIds } },
       orderBy: { submittedAt: "desc" },
       select: { examinationId: true }
     });
@@ -192,14 +283,14 @@ questionRoutes.post("/online/start", authenticate, async (req: AuthRequest, res)
   if (!snapshot.access.onlineExam) throw new AppError(400, "Online examination is not active");
 
   const application = await prisma.application.findFirst({
-    where: { candidateId: candidate.id, examinationId: snapshot.exam.id, status: { in: ["APPROVED", "PENDING"] } },
+    where: { candidateId: { in: candidateIds }, examinationId: snapshot.exam.id, status: { in: ["APPROVED", "PENDING"] } },
     orderBy: { submittedAt: "desc" }
   });
   if (!application) throw new AppError(404, "No application found for this examination");
 
   // Check attempt limit
   const attemptCount = await prisma.examAttempt.count({
-    where: { studentId: candidate.id, examId: snapshot.exam.id }
+    where: { studentId: application.candidateId, examId: snapshot.exam.id }
   });
 
   if (attemptCount >= (snapshot.exam.maximumAttempts || 1)) {
@@ -241,13 +332,13 @@ questionRoutes.post("/online/start", authenticate, async (req: AuthRequest, res)
 questionRoutes.post("/online/submit", authenticate, async (req: AuthRequest, res) => {
   if (!req.user) throw new AppError(401, "Authentication required");
 
-  const candidate = await prisma.candidate.findUnique({ where: { userId: req.user.id } });
-  if (!candidate) throw new AppError(404, "Candidate profile not found");
+  const candidateIds = await getCandidateIds(req.user);
+  if (candidateIds.length === 0) throw new AppError(404, "Candidate profile not found");
 
   let examId = String(req.body.examId || "").trim();
   if (!examId) {
     const latestApp = await prisma.application.findFirst({
-      where: { candidateId: candidate.id },
+      where: { candidateId: { in: candidateIds } },
       orderBy: { submittedAt: "desc" },
       select: { examinationId: true }
     });
@@ -260,7 +351,7 @@ questionRoutes.post("/online/submit", authenticate, async (req: AuthRequest, res
   if (!snapshot.access.onlineExam) throw new AppError(400, "Online examination is not active");
 
   const application = await prisma.application.findFirst({
-    where: { candidateId: candidate.id, examinationId: snapshot.exam.id, status: { in: ["APPROVED", "PENDING"] } },
+    where: { candidateId: { in: candidateIds }, examinationId: snapshot.exam.id, status: { in: ["APPROVED", "PENDING"] } },
     orderBy: { submittedAt: "desc" }
   });
   if (!application) throw new AppError(404, "No application found for this examination");
@@ -325,7 +416,7 @@ questionRoutes.post("/online/submit", authenticate, async (req: AuthRequest, res
   const resultStatus = score >= (snapshot.exam.passingMarks || 40) ? "PASS" : "FAIL";
 
   const attemptCount = await prisma.examAttempt.count({
-    where: { studentId: candidate.id, examId: snapshot.exam.id }
+    where: { studentId: application.candidateId, examId: snapshot.exam.id }
   });
   const attemptNumber = attemptCount + 1;
   const timeTaken = Math.floor((new Date().getTime() - (session.startedAt || new Date()).getTime()) / 1000);
@@ -334,7 +425,7 @@ questionRoutes.post("/online/submit", authenticate, async (req: AuthRequest, res
   const attempt = await prisma.examAttempt.create({
     data: {
       attemptNumber,
-      studentId: candidate.id,
+      studentId: application.candidateId,
       examId: snapshot.exam.id,
       answers: answers as any,
       submittedAt: new Date(),
