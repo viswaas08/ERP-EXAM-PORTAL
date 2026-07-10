@@ -14,9 +14,11 @@ export function authenticate(req: AuthRequest, _res: Response, next: NextFunctio
   next();
 }
 
-export function authorize(permission: string) {
+export function authorize(...permissions: string[]) {
   return (req: AuthRequest, _res: Response, next: NextFunction) => {
-    if (!req.user?.permissions?.includes(permission) && req.user?.role !== "Super Admin") throw new AppError(403, "Permission denied");
+    if (req.user?.role === "Super Admin") return next();
+    const hasPermission = permissions.some((p) => req.user?.permissions?.includes(p));
+    if (!hasPermission) throw new AppError(403, "Permission denied");
     next();
   };
 }

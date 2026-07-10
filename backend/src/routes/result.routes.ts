@@ -168,7 +168,7 @@ resultRoutes.get("/submissions", authenticate, async (req, res) => {
   }));
 });
 
-resultRoutes.post("/evaluate", authenticate, authorize("result:publish"), async (req, res) => {
+resultRoutes.post("/evaluate", authenticate, authorize("result:publish", "officer:result:publish"), async (req, res) => {
   const examId = String(req.body.examId || "");
   if (!examId) return res.status(400).json({ message: "Select an examination before evaluating results" });
 
@@ -176,7 +176,7 @@ resultRoutes.post("/evaluate", authenticate, authorize("result:publish"), async 
   res.status(201).json({ evaluated: evaluated.length });
 });
 
-resultRoutes.post("/publish", authenticate, authorize("result:publish"), async (req, res) => {
+resultRoutes.post("/publish", authenticate, authorize("result:publish", "officer:result:publish"), async (req, res) => {
   const examId = String(req.body.examId || "");
   if (!examId) return res.status(400).json({ message: "Select an examination before publishing results" });
 
@@ -213,7 +213,7 @@ resultRoutes.post("/publish", authenticate, authorize("result:publish"), async (
   res.json({ published: updated.count, activePhase: phase });
 });
 
-resultRoutes.post("/unpublish", authenticate, authorize("result:publish"), async (req, res) => {
+resultRoutes.post("/unpublish", authenticate, authorize("result:publish", "officer:result:publish"), async (req, res) => {
   const examId = String(req.body.examId || "");
   if (!examId) return res.status(400).json({ message: "Select an examination before unpublishing results" });
 
@@ -247,7 +247,7 @@ resultRoutes.post("/unpublish", authenticate, authorize("result:publish"), async
   res.json({ unpublished: updated.count, activePhase: phase });
 });
 
-resultRoutes.post("/republish", authenticate, authorize("result:publish"), async (req, res) => {
+resultRoutes.post("/republish", authenticate, authorize("result:publish", "officer:result:publish"), async (req, res) => {
   const examId = String(req.body.examId || "");
   if (!examId) return res.status(400).json({ message: "Select an examination before republishing results" });
 
