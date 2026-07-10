@@ -61,7 +61,8 @@ function PasswordField({
 }
 
 export function CandidatePortal() {
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, user, logout } = useAuth();
+  const isCandidate = isAuthenticated && user?.role === "Candidate";
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState(0);
   const [submitted, setSubmitted] = useState(false);
@@ -153,13 +154,13 @@ export function CandidatePortal() {
       setNotice(`${steps[activeStep + 1]} is now active.`);
       return;
     }
-    if (!isAuthenticated && form.password.length < 8) {
+    if (!isCandidate && form.password.length < 8) {
       setNotice("Create a password with at least 8 characters before final submission.");
       return;
     }
     try {
       const selectedCity = tamilNaduDistrictCentres.find((item) => item.city === form.centre) ?? tamilNaduDistrictCentres[0];
-      const endpoint = isAuthenticated ? "/candidate/registration" : "/candidate/public-registration";
+      const endpoint = isCandidate ? "/candidate/registration" : "/candidate/public-registration";
       const application = await api<{ applicationNo: string; candidateLogin?: { email: string } }>(endpoint, {
         method: "POST",
         body: JSON.stringify({
@@ -174,7 +175,7 @@ export function CandidatePortal() {
       setApplicationNo(application.applicationNo);
       setSubmitted(true);
       setNotice(
-        isAuthenticated
+        isCandidate
           ? `Application ${application.applicationNo} saved in Neon database.`
           : `Application ${application.applicationNo} saved. Login with ${application.candidateLogin?.email ?? form.email} to open the candidate dashboard.`
       );
@@ -220,7 +221,7 @@ export function CandidatePortal() {
               <Button className="bg-secondary" disabled={!selectedExam} onClick={() => setNotice(selectedExam ? `${selectedExam.code} selected for registration.` : "No live examination is available.")}>Use Exam</Button>
             </div>
             <h2 className="font-semibold">{steps[activeStep]}</h2>
-            {activeStep === 0 && <div className="grid gap-3 md:grid-cols-2"><Input placeholder="Full name" value={form.name} onChange={(event) => updateField("name", event.target.value)} /><Input placeholder="Email" value={form.email} onChange={(event) => updateField("email", event.target.value)} />{!isAuthenticated && <PasswordField value={form.password} visible={showPassword} onChange={(value) => updateField("password", value)} onToggle={() => setShowPassword((value) => !value)} />}<Input placeholder="Phone" value={form.phone} onChange={(event) => updateField("phone", event.target.value)} /></div>}
+            {activeStep === 0 && <div className="grid gap-3 md:grid-cols-2"><Input placeholder="Full name" value={form.name} onChange={(event) => updateField("name", event.target.value)} /><Input placeholder="Email" value={form.email} onChange={(event) => updateField("email", event.target.value)} />{!isCandidate && <PasswordField value={form.password} visible={showPassword} onChange={(value) => updateField("password", value)} onToggle={() => setShowPassword((value) => !value)} />}<Input placeholder="Phone" value={form.phone} onChange={(event) => updateField("phone", event.target.value)} /></div>}
             {activeStep === 1 && <div className="grid gap-3 md:grid-cols-2"><Input type="date" value={form.dateOfBirth} onChange={(event) => updateField("dateOfBirth", event.target.value)} /><Select value={form.nationality} onChange={(event) => updateField("nationality", event.target.value)}>{nationalities.map((item) => <option key={item}>{item}</option>)}</Select><Select value={form.category} onChange={(event) => updateField("category", event.target.value)}>{categories.map((item) => <option key={item}>{item}</option>)}</Select><Select value={form.centre} onChange={(event) => updateField("centre", event.target.value)}>{tamilNaduDistrictCentres.map((item) => <option key={item.district} value={item.city}>{item.district} - {item.city}</option>)}</Select><textarea className="min-h-24 rounded-md border border-border bg-background p-3 text-sm md:col-span-2" placeholder="Address" value={form.address} onChange={(event) => updateField("address", event.target.value)} /></div>}
             {activeStep === 2 && <div className="grid gap-3 md:grid-cols-2"><Select value={form.qualification} onChange={(event) => updateField("qualification", event.target.value)}>{qualifications.map((item) => <option key={item}>{item}</option>)}</Select><Input placeholder="University" value={form.university} onChange={(event) => updateField("university", event.target.value)} /><Input placeholder="Percentage" value={form.percentage} onChange={(event) => updateField("percentage", event.target.value)} /><Input placeholder="Passing year" value={form.year} onChange={(event) => updateField("year", event.target.value)} /></div>}
             {activeStep === 3 && <textarea className="min-h-28 w-full rounded-md border border-border bg-background p-3 text-sm" placeholder="Experience details, if any" value={form.experience} onChange={(event) => updateField("experience", event.target.value)} />}
