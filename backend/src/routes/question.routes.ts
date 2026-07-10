@@ -100,7 +100,7 @@ questionRoutes.post("/banks/import", authenticate, async (req: AuthRequest, res)
       where: { id: bank.id },
       include: { exam: true, _count: { select: { questions: true } } }
     });
-  });
+  }, { timeout: 60000 });
 
   res.status(201).json(imported);
 });
