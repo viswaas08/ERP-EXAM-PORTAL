@@ -158,7 +158,7 @@ export function Examinations() {
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [notice, setNotice] = useState("Loading examinations...");
-  const [selectedExamId, setSelectedExamId] = useState<string | undefined>(undefined);
+  const [selectedExamId, setSelectedExamId] = usePersistentState<string | undefined>("examPortal.examinations.selectedExamId", undefined);
   const [activeTab, setActiveTab] = useState("overview");
 
   // Form State
