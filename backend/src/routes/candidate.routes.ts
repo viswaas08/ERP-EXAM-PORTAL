@@ -26,14 +26,14 @@ async function resolveExam(examInput?: string) {
   const exam = await prisma.examination.findFirst({
     where: input
       ? {
-          status: { in: ["OPEN", "ACTIVE"] },
+          status: { in: ["OPEN", "ACTIVE", "PUBLISHED", "ONLINE"] },
           OR: [
             { id: input },
             { name: { contains: input, mode: "insensitive" } },
             { code: { contains: input, mode: "insensitive" } }
           ]
         }
-      : { status: { in: ["OPEN", "ACTIVE"] } },
+      : { status: { in: ["OPEN", "ACTIVE", "PUBLISHED", "ONLINE"] } },
     include: { workflowPhases: true },
     orderBy: { createdAt: "desc" }
   });
