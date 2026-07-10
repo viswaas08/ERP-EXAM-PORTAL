@@ -241,6 +241,34 @@ export function QuestionBank() {
     }
   }
 
+  async function promptAssignBank(bankId: string) {
+    const examCodesList = exams.map((e) => e.code).join(", ");
+    const targetCode = prompt(`Available Exams: ${examCodesList}\n\nEnter the exam code to assign this bank to:`);
+    if (!targetCode) return;
+
+    const trimmed = targetCode.trim();
+    const foundExam = exams.find((e) => e.code.toLowerCase() === trimmed.toLowerCase());
+    if (!foundExam) {
+      alert(`Invalid exam code: "${trimmed}". Please choose from: ${examCodesList}`);
+      return;
+    }
+
+    try {
+      const updated = await api<QuestionBankSummary>(`/questions/banks/${bankId}/assign`, {
+        method: "PATCH",
+        body: JSON.stringify({ targetExamId: foundExam.id })
+      });
+      setBanks((current) => current.map((bank) => bank.id === updated.id ? updated : bank));
+      setNotice(`Assigned bank "${updated.name}" successfully to ${updated.exam?.code || "target exam"}.`);
+      await loadBanks();
+      if (selectedBankId === bankId) {
+        await loadQuestions(bankId);
+      }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not assign the question bank.");
+    }
+  }
+
   async function addQuestion() {
     if (!selectedBankId) {
       setNotice("Select a question bank before creating a question.");
@@ -346,7 +374,17 @@ export function QuestionBank() {
                   Active Bank
                   {selectedBankId === bank.id && <CheckCircle size={13} className="text-primary" />}
                 </span>
-                {bank.exam && (
+                {!bank.exam ? (
+                  <button
+                    className="text-indigo-600 hover:text-indigo-800 hover:underline font-semibold text-[10px] transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void promptAssignBank(bank.id);
+                    }}
+                  >
+                    Assign
+                  </button>
+                ) : (
                   <button
                     className="text-rose-600 hover:text-rose-800 hover:underline font-semibold text-[10px] transition-colors"
                     onClick={(e) => {
@@ -562,7 +600,7 @@ export function QuestionBank() {
                   )}
                 </td>
                 <td className="p-3.5">
-                  <Badge className="font-mono text-[9px] bg-slate-100 font-semibold">{q.bank?.exam.code ?? "Draft"}</Badge>
+                  <Badge className="font-mono text-[9px] bg-slate-100 font-semibold">{q.bank?.exam?.code ?? "Draft"}</Badge>
                   <div className="mt-1 text-[10px] text-slate-400 font-medium">{q.bank?.name ?? "Local Draft"}</div>
                 </td>
                 <td className="p-3.5">
