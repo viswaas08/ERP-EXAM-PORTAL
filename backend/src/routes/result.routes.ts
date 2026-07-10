@@ -30,6 +30,67 @@ async function activateResultPublicationPhase(examId: string) {
 }
 
 async function evaluateApplications(examId?: string) {
+  // Auto-heal/migrate legacy ExamSessions with status SUBMITTED to new ExamAttempts
+  const sessions = await prisma.examSession.findMany({
+    where: { examId: examId || undefined, status: "SUBMITTED" }
+  });
+  for (const session of sessions) {
+    const app = await prisma.application.findUnique({
+      where: { id: session.applicationId }
+    });
+    if (!app) continue;
+
+    const hasAttempt = await prisma.examAttempt.findFirst({
+      where: { studentId: app.candidateId, examId: session.examId }
+    });
+    if (hasAttempt) continue;
+
+    const responses = await prisma.candidateResponse.findMany({
+      where: { sessionId: session.id },
+      include: { question: { include: { options: true } } }
+    });
+
+    const exam = await prisma.examination.findUnique({
+      where: { id: session.examId }
+    });
+    if (!exam) continue;
+
+    let score = 0;
+    const answers: Record<string, string> = {};
+
+    for (const resp of responses) {
+      const ans = resp.answer as { optionId?: string } | null;
+      if (ans && ans.optionId) {
+        answers[resp.questionId] = ans.optionId;
+        const selectedOption = resp.question.options.find(o => o.id === ans.optionId);
+        if (selectedOption?.isCorrect) {
+          score += resp.question.marks;
+        } else {
+          score -= resp.question.negativeMarks;
+        }
+      }
+    }
+
+    const totalQuestions = responses.length || 1;
+    const maxPossibleMarks = exam.maximumMarks || (totalQuestions * 2);
+    const percentage = maxPossibleMarks > 0 ? Math.max(0, (score / maxPossibleMarks) * 100) : 0;
+
+    await prisma.examAttempt.create({
+      data: {
+        attemptNumber: 1,
+        studentId: app.candidateId,
+        examId: session.examId,
+        answers,
+        score,
+        percentage,
+        resultStatus: percentage >= exam.passingMarks ? "PASS" : "FAIL",
+        evaluationStatus: "COMPLETED",
+        published: false,
+        timeTaken: 1200
+      }
+    });
+  }
+
   const applications = await prisma.application.findMany({
     where: { examinationId: examId || undefined }
   });

@@ -120,18 +120,17 @@ export function CandidateDashboard() {
   const publishedResult = selectedApplication?.result?.status === "PUBLISHED" ? selectedApplication.result : null;
 
   const resultMessage = useMemo(() => {
+    if (publishedResult) {
+      return `Final Score: ${publishedResult.marks} marks, Rank: #${publishedResult.rank}, Percentage: ${publishedResult.percentage.toFixed(1)}% (${publishedResult.qualified ? "Qualified / Pass" : "Not Qualified / Fail"}).`;
+    }
+
     if (!activeAttempt) {
       return phase.access.result
         ? "Result publication is active, but you have not completed any attempts."
         : `Result is locked during ${phase.activePhase?.name ?? "the current phase"}.`;
     }
     
-    const isResultPublished = publishedResult !== null;
-    if (!isResultPublished) {
-      return "Result is awaiting publication from the administration.";
-    }
-
-    return `Attempt #${activeAttempt.attemptNumber} score: ${activeAttempt.score} marks, Rank #${activeAttempt.rank}, Pct: ${activeAttempt.percentage.toFixed(1)}% (${activeAttempt.resultStatus}).`;
+    return "Result is awaiting publication from the administration.";
   }, [activeAttempt, publishedResult, phase.access.result, phase.activePhase?.name]);
 
   const hallTicketMessage = selectedApplication?.hallTicket
@@ -319,10 +318,10 @@ export function CandidateDashboard() {
                   <Button className="flex-1 text-xs" disabled={!publishedResult} onClick={() => void loadDashboard()}>
                     Verify Result
                   </Button>
-                  {publishedResult && activeAttempt && (
+                  {publishedResult && (
                     <Button
                       className="bg-secondary text-xs px-2"
-                      onClick={() => downloadFile(`${selectedApplication.applicationNo}-score-card.txt`, `Score Card\nApplication: ${selectedApplication.applicationNo}\nExam: ${selectedApplication.examination.code}\nAttempt #: ${activeAttempt.attemptNumber}\nMarks: ${activeAttempt.score}\nPercentage: ${activeAttempt.percentage.toFixed(2)}%\nRank: ${activeAttempt.rank}\nResult Status: ${activeAttempt.resultStatus}`)}
+                      onClick={() => downloadFile(`${selectedApplication.applicationNo}-score-card.txt`, `Score Card\nApplication: ${selectedApplication.applicationNo}\nExam: ${selectedApplication.examination.code}\nMarks: ${publishedResult.marks}\nPercentage: ${publishedResult.percentage.toFixed(2)}%\nRank: ${publishedResult.rank}\nResult: ${publishedResult.qualified ? "Qualified / Pass" : "Not Qualified / Fail"}`)}
                     >
                       Download Score
                     </Button>
