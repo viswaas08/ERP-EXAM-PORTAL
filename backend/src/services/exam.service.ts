@@ -205,7 +205,8 @@ export async function activateWorkflowPhase(examId: string, phaseId: string) {
       data: { status: "OPEN" }
     });
 
-    if (activated.name === "Online Examination") {
+    const activatedNormalized = activated.name.toLowerCase();
+    if (activatedNormalized.includes("online") || activatedNormalized.includes("exam")) {
       await tx.examination.update({
         where: { id: examId },
         data: { status: "ONLINE", onlineAt: new Date() }
@@ -244,7 +245,7 @@ export async function getCandidatePhaseSnapshot(examId?: string) {
     documentVerification: normalized.includes("document"),
     eligibilityVerification: normalized.includes("eligibility"),
     hallTicket: normalized.includes("hall ticket"),
-    onlineExam: normalized.includes("online examination") && (exam.status === "ONLINE" || exam.status === "OPEN" || exam.status === "ACTIVE"),
+    onlineExam: (normalized.includes("online") || normalized.includes("exam online") || normalized.includes("online examination")) && (exam.status === "ONLINE" || exam.status === "OPEN" || exam.status === "ACTIVE" || exam.status === "PUBLISHED"),
     evaluation: normalized.includes("evaluation"),
     result: normalized.includes("result"),
     archiveDownloads: normalized.includes("archive")
