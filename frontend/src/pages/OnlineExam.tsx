@@ -65,14 +65,14 @@ function formatClock(totalSeconds: number) {
 export function OnlineExam() {
   const { logout } = useAuth();
   const navigate = useNavigate();
-  const [currentIndex, setCurrentIndex] = usePersistentState("examPortal.onlineExam.v3.currentIndex", 0);
-  const [answers, setAnswers] = usePersistentState<Record<string, string>>("examPortal.onlineExam.v3.answers", {});
-  const [marked, setMarked] = usePersistentState<string[]>("examPortal.onlineExam.v3.marked", []);
-  const [submitted, setSubmitted] = usePersistentState("examPortal.onlineExam.v3.submitted", false);
-  const [examStarted, setExamStarted] = usePersistentState("examPortal.onlineExam.v3.started", false);
-  const [sessionId, setSessionId] = usePersistentState("examPortal.onlineExam.v3.sessionId", "");
-  const [startedAt, setStartedAt] = usePersistentState("examPortal.onlineExam.v3.startedAt", "");
-  const [notice, setNotice] = usePersistentState("examPortal.onlineExam.v3.notice", "Loading question paper...");
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [marked, setMarked] = useState<string[]>([]);
+  const [submitted, setSubmitted] = useState(false);
+  const [examStarted, setExamStarted] = useState(false);
+  const [sessionId, setSessionId] = useState("");
+  const [startedAt, setStartedAt] = useState("");
+  const [notice, setNotice] = useState("Loading question paper...");
   const [phase, setPhase] = useState<CandidatePhaseSnapshot>(fallbackPhase);
   const [paper, setPaper] = useState<OnlinePaper | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
@@ -95,8 +95,19 @@ export function OnlineExam() {
         setPaper(data);
         setPhase({ exam: data.exam, activePhase: data.activePhase, access: data.access });
         
+        const examId = data.exam.id;
+        const prefix = `examPortal.onlineExam.v3.${examId}.`;
+        
+        setCurrentIndex(Number(localStorage.getItem(prefix + "currentIndex") || "0"));
+        setAnswers(JSON.parse(localStorage.getItem(prefix + "answers") || "{}"));
+        setMarked(JSON.parse(localStorage.getItem(prefix + "marked") || "[]"));
+        setSubmitted(localStorage.getItem(prefix + "submitted") === "true");
+        setExamStarted(localStorage.getItem(prefix + "started") === "true");
+        setSessionId(localStorage.getItem(prefix + "sessionId") || "");
+        setStartedAt(localStorage.getItem(prefix + "startedAt") || "");
+
         // Fetch dashboard data for attempts count
-        api<DashboardData>("/candidate/dashboard")
+        api<DashboardData>(`/candidate/dashboard?examId=${encodeURIComponent(examId)}`)
           .then((dash) => {
             const count = dash.attempts?.length ?? 0;
             setCompletedAttemptsCount(count);
@@ -115,6 +126,19 @@ export function OnlineExam() {
       })
       .catch((error) => setNotice(error instanceof Error ? error.message : "Could not load the online exam paper."));
   };
+
+  useEffect(() => {
+    if (!paper) return;
+    const examId = paper.exam.id;
+    const prefix = `examPortal.onlineExam.v3.${examId}.`;
+    localStorage.setItem(prefix + "currentIndex", String(currentIndex));
+    localStorage.setItem(prefix + "answers", JSON.stringify(answers));
+    localStorage.setItem(prefix + "marked", JSON.stringify(marked));
+    localStorage.setItem(prefix + "submitted", String(submitted));
+    localStorage.setItem(prefix + "started", String(examStarted));
+    localStorage.setItem(prefix + "sessionId", sessionId);
+    localStorage.setItem(prefix + "startedAt", startedAt);
+  }, [paper, currentIndex, answers, marked, submitted, examStarted, sessionId, startedAt]);
 
   useEffect(() => {
     loadPaperAndAttempts();
