@@ -146,14 +146,22 @@ questionRoutes.post("/banks/import", authenticate, async (req: AuthRequest, res)
 questionRoutes.patch("/banks/:id/assign", authenticate, async (req: AuthRequest, res) => {
   if (!req.user) throw new AppError(401, "Authentication required");
   const bankId = String(req.params.id);
-  const targetExamId = String(req.body.targetExamId || "");
-
-  if (!targetExamId) throw new AppError(400, "Target examination is required");
+  const targetExamId = String(req.body.targetExamId || "").trim();
 
   const bank = await prisma.questionBank.findUnique({
     where: { id: bankId }
   });
   if (!bank) throw new AppError(404, "Question bank not found");
+
+  if (!targetExamId) {
+    const updated = await prisma.questionBank.update({
+      where: { id: bankId },
+      data: { examId: null },
+      include: { exam: true, _count: { select: { questions: true } } }
+    });
+    res.json(updated);
+    return;
+  }
 
   const targetExam = await prisma.examination.findUnique({ where: { id: targetExamId } });
   if (!targetExam) throw new AppError(404, "Target examination not found");

@@ -267,9 +267,9 @@ model Topic {
 }
 
 model QuestionBank {
-  id        String      @id @default(cuid())
-  examId    String
-  exam      Examination @relation(fields: [examId], references: [id])
+  id        String       @id @default(cuid())
+  examId    String?
+  exam      Examination? @relation(fields: [examId], references: [id])
   name      String
   questions Question[]
 }

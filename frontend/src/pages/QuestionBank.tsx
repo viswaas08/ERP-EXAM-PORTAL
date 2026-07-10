@@ -23,7 +23,7 @@ type RawQuestionRow = Partial<QuestionRow> & Record<string, unknown>;
 type QuestionBankSummary = {
   id: string;
   name: string;
-  exam: { id: string; code: string; name: string };
+  exam: { id: string; code: string; name: string } | null;
   _count?: { questions: number };
 };
 
@@ -161,13 +161,13 @@ export function QuestionBank() {
       const subjectMatch = subject === "All Subjects" || q.subject.name === subject;
       const difficultyMatch = difficulty === "All Difficulties" || q.difficulty === difficulty;
       const typeMatch = type === "All Types" || q.questionType === type;
-      const examMatch = examFilter === "All Exams" || q.bank?.exam.code === examFilter;
+      const examMatch = examFilter === "All Exams" || q.bank?.exam?.code === examFilter;
       return textMatch && subjectMatch && difficultyMatch && typeMatch && examMatch;
     });
   }, [safeRows, search, subject, difficulty, type, examFilter]);
 
   const subjects = useMemo(() => ["All Subjects", ...Array.from(new Set([...subjectOptions, ...safeRows.map((q) => q.subject.name)])).sort()], [safeRows]);
-  const examCodes = useMemo(() => Array.from(new Set(banks.map((bank) => bank.exam.code).filter(Boolean))), [banks]);
+  const examCodes = useMemo(() => Array.from(new Set(banks.map((bank) => bank.exam?.code).filter(Boolean))), [banks]);
   const totalMarks = safeRows.reduce((sum, q) => sum + Number(q.marks || 0), 0);
   const selectedBank = banks.find((bank) => bank.id === selectedBankId) ?? null;
   const targetExam = exams.find((exam) => exam.id === selectedExamId) ?? null;
@@ -190,7 +190,7 @@ export function QuestionBank() {
       });
       setBanks((current) => [imported, ...current.filter((bank) => bank.id !== imported.id)]);
       setSelectedBankId(imported.id);
-      setNotice(`Imported ${imported.name} successfully into ${imported.exam.code || "target exam"}.`);
+      setNotice(`Imported ${imported.name} successfully into ${imported.exam?.code || "target exam"}.`);
       await loadQuestions(imported.id);
       await loadBanks();
     } catch (error) {
@@ -216,11 +216,28 @@ export function QuestionBank() {
       });
       setBanks((current) => current.map((bank) => bank.id === updated.id ? updated : bank));
       setSelectedBankId(updated.id);
-      setNotice(`Assigned bank "${updated.name}" successfully to ${updated.exam.code || "target exam"}.`);
+      setNotice(`Assigned bank "${updated.name}" successfully to ${updated.exam?.code || "target exam"}.`);
       await loadQuestions(updated.id);
       await loadBanks();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not assign the question bank.");
+    }
+  }
+
+  async function unassignBank(bankId: string) {
+    try {
+      const updated = await api<QuestionBankSummary>(`/questions/banks/${bankId}/assign`, {
+        method: "PATCH",
+        body: JSON.stringify({ targetExamId: "" })
+      });
+      setBanks((current) => current.map((bank) => bank.id === updated.id ? { ...bank, exam: null } : bank));
+      setNotice(`Unassigned bank "${updated.name}" successfully.`);
+      await loadBanks();
+      if (selectedBankId === bankId) {
+        await loadQuestions(bankId);
+      }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not unassign the question bank.");
     }
   }
 
@@ -325,8 +342,21 @@ export function QuestionBank() {
               </div>
 
               <div className="border-t border-slate-100 pt-2.5 mt-3 text-[10px] flex justify-between items-center text-slate-500">
-                <span>Active Bank</span>
-                {selectedBankId === bank.id && <CheckCircle size={13} className="text-primary" />}
+                <span className="flex items-center gap-1">
+                  Active Bank
+                  {selectedBankId === bank.id && <CheckCircle size={13} className="text-primary" />}
+                </span>
+                {bank.exam && (
+                  <button
+                    className="text-rose-600 hover:text-rose-800 hover:underline font-semibold text-[10px] transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void unassignBank(bank.id);
+                    }}
+                  >
+                    Unassign
+                  </button>
+                )}
               </div>
             </Card>
           ))}
@@ -354,7 +384,7 @@ export function QuestionBank() {
                 <option value="">Select source bank...</option>
                 {banks.map((bank) => (
                   <option key={bank.id} value={bank.id}>
-                    {bank.exam.code} - {bank.name} ({bank._count?.questions ?? 0} Questions)
+                    {bank.exam?.code || "Unassigned"} - {bank.name} ({bank._count?.questions ?? 0} Questions)
                   </option>
                 ))}
               </Select>
@@ -406,7 +436,7 @@ export function QuestionBank() {
               <h2 className="font-bold text-slate-900 text-sm">Add Question to Selected Bank</h2>
             </div>
             <Badge className="bg-primary/10 text-primary border-primary/20 font-mono text-[10px]">
-              {selectedBank ? `${selectedBank.exam.code} - ${selectedBank.name}` : "Local Draft"}
+              {selectedBank ? `${selectedBank.exam?.code || "Unassigned"} - ${selectedBank.name}` : "Local Draft"}
             </Badge>
           </div>
 
@@ -417,7 +447,7 @@ export function QuestionBank() {
                 <option value="">Choose bank...</option>
                 {banks.map((bank) => (
                   <option key={bank.id} value={bank.id}>
-                    {bank.exam.code} - {bank.name}
+                    {bank.exam?.code || "Unassigned"} - {bank.name}
                   </option>
                 ))}
               </Select>
