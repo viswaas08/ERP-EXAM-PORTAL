@@ -71,8 +71,10 @@ async function ensureTamilNaduCentres(examId: string) {
   return prisma.examCentre.findMany({ where: { examId }, orderBy: [{ city: "asc" }, { name: "asc" }] });
 }
 
-hallTicketRoutes.get("/", authenticate, async (_req, res) => {
+hallTicketRoutes.get("/", authenticate, async (req, res) => {
+  const examId = req.query.examId as string | undefined;
   const tickets = await prisma.hallTicket.findMany({
+    where: examId ? { examId } : undefined,
     include: {
       application: { include: { candidate: { include: { user: true } }, examination: true } },
       centre: true
@@ -112,7 +114,7 @@ hallTicketRoutes.get("/:id.pdf", authenticate, async (req: AuthRequest, res) => 
   ]);
 });
 
-hallTicketRoutes.post("/generate", authenticate, authorize("hall-ticket:generate"), async (req, res) => {
+hallTicketRoutes.post("/generate", authenticate, authorize("hall-ticket:generate", "controller:exam:manage"), async (req, res) => {
   const examId = String(req.body.examId || "");
   const where = examId ? { examinationId: examId, status: "APPROVED" } : { status: "APPROVED" };
   const applications = await prisma.application.findMany({
