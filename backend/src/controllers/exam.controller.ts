@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { examSchema } from "../validators/exam.validator.js";
+import { examSchema, examUpdateSchema } from "../validators/exam.validator.js";
 import * as examService from "../services/exam.service.js";
 
 export async function list(req: Request, res: Response) {
@@ -15,7 +15,7 @@ export async function create(req: Request, res: Response) {
 }
 
 export async function update(req: Request, res: Response) {
-  res.json(await examService.updateExam(String(req.params.id), req.body));
+  res.json(await examService.updateExam(String(req.params.id), examUpdateSchema.parse(req.body)));
 }
 
 export async function archive(req: Request, res: Response) {

@@ -6,12 +6,26 @@ export const WORKFLOW_PHASE_NAMES = ["Registration", "Correction Window", "Docum
 export function listExams(query: { search?: string; status?: string }) {
   return prisma.examination.findMany({
     where: {
-      status: query.status,
+      status: query.status || undefined,
       OR: query.search ? [{ name: { contains: query.search, mode: "insensitive" } }, { code: { contains: query.search, mode: "insensitive" } }] : undefined
     },
     include: { workflowPhases: true, _count: { select: { applications: true } } },
     orderBy: { createdAt: "desc" }
   });
+}
+
+function buildPhaseSchedule(startDate?: string, endDate?: string) {
+  const start = startDate ? new Date(startDate) : new Date();
+  const end = endDate ? new Date(endDate) : new Date(start.getTime() + WORKFLOW_PHASE_NAMES.length * 24 * 60 * 60 * 1000);
+  const safeEnd = end.getTime() > start.getTime() ? end : new Date(start.getTime() + WORKFLOW_PHASE_NAMES.length * 24 * 60 * 60 * 1000);
+  const phaseDuration = (safeEnd.getTime() - start.getTime()) / WORKFLOW_PHASE_NAMES.length;
+
+  return WORKFLOW_PHASE_NAMES.map((name, index) => ({
+    name,
+    status: index === 0 ? "OPEN" : "SCHEDULED",
+    opensAt: new Date(start.getTime() + index * phaseDuration),
+    closesAt: new Date(start.getTime() + (index + 1) * phaseDuration)
+  }));
 }
 
 export function listLiveExams() {
@@ -23,19 +37,28 @@ export function listLiveExams() {
 }
 
 export function createExam(data: any) {
-  const now = new Date();
+  const { startDate, endDate, ...examData } = data;
+  const name = examData.examName ?? examData.name ?? "Configurable Exam";
+  const code = examData.examCode ?? examData.code ?? `EXAM-${Date.now()}`;
+
+  const legacyFields = {
+    name,
+    code,
+    durationMinutes: examData.duration ?? examData.durationMinutes ?? 120,
+    maximumMarks: examData.totalMarks ?? examData.maximumMarks ?? 100,
+    passingMarks: examData.passingMarks ?? 40,
+    negativeMarking: examData.negativeMarkingEnabled ?? examData.negativeMarking ?? false,
+  };
+
   return prisma.$transaction(async (tx) => {
     const created = await tx.examination.create({
       data: {
-        ...data,
-        status: data.status ?? "DRAFT",
+        ...examData,
+        ...legacyFields,
+        examDate: examData.examDate ? new Date(examData.examDate) : null,
+        status: examData.status ?? "DRAFT",
         workflowPhases: {
-          create: WORKFLOW_PHASE_NAMES.map((name, index) => ({
-            name,
-            status: index === 0 ? "OPEN" : "SCHEDULED",
-            opensAt: new Date(now.getTime() + index * 24 * 60 * 60 * 1000),
-            closesAt: new Date(now.getTime() + (index + 1) * 24 * 60 * 60 * 1000)
-          }))
+          create: buildPhaseSchedule(startDate, endDate)
         }
       }
     });
@@ -54,11 +77,51 @@ export function createExam(data: any) {
   });
 }
 
-export function updateExam(id: string, data: { name?: string; department?: string; status?: string }) {
-  return prisma.examination.update({
-    where: { id },
-    data,
-    include: { workflowPhases: true, _count: { select: { applications: true } } }
+export async function updateExam(id: string, data: any) {
+  const { startDate, endDate, ...examData } = data;
+
+  const legacyFields: any = {};
+  if (examData.examName !== undefined) legacyFields.name = examData.examName;
+  if (examData.examCode !== undefined) legacyFields.code = examData.examCode;
+  if (examData.duration !== undefined) legacyFields.durationMinutes = examData.duration;
+  if (examData.totalMarks !== undefined) legacyFields.maximumMarks = examData.totalMarks;
+  if (examData.negativeMarkingEnabled !== undefined) legacyFields.negativeMarking = examData.negativeMarkingEnabled;
+
+  return prisma.$transaction(async (tx) => {
+    if (startDate || endDate) {
+      const phases = await tx.workflowPhase.findMany({ where: { examId: id }, orderBy: { opensAt: "asc" } });
+      const schedule = buildPhaseSchedule(startDate, endDate || phases.at(-1)?.closesAt.toISOString());
+      for (const [index, phase] of phases.entries()) {
+        const slot = schedule[index];
+        if (!slot) continue;
+        await tx.workflowPhase.update({
+          where: { id: phase.id },
+          data: { opensAt: slot.opensAt, closesAt: slot.closesAt }
+        });
+      }
+    }
+
+    const finalData = {
+      ...examData,
+      ...legacyFields,
+    };
+    if (examData.examDate) {
+      finalData.examDate = new Date(examData.examDate);
+    }
+
+    if (examData.status === "PUBLISHED") {
+      finalData.publishedAt = new Date();
+    } else if (examData.status === "ONLINE" || examData.status === "OPEN" || examData.status === "ACTIVE") {
+      finalData.onlineAt = new Date();
+    } else if (examData.status === "ARCHIVED") {
+      finalData.archivedAt = new Date();
+    }
+
+    return tx.examination.update({
+      where: { id },
+      data: finalData,
+      include: { workflowPhases: true, _count: { select: { applications: true } } }
+    });
   });
 }
 
@@ -73,11 +136,29 @@ export async function cloneExam(id: string) {
       data: {
         name: `${exam.name} Copy`,
         code: `${exam.code}-COPY-${Date.now()}`,
+        examName: exam.examName ? `${exam.examName} Copy` : `${exam.name} Copy`,
+        examCode: exam.examCode ? `${exam.examCode}-COPY-${Date.now()}` : `${exam.code}-COPY-${Date.now()}`,
         description: exam.description,
         department: exam.department,
+        course: exam.course,
+        semester: exam.semester,
+        subject: exam.subject,
+        examType: exam.examType,
+        examDate: exam.examDate,
+        startTime: exam.startTime,
+        duration: exam.duration,
+        instructions: exam.instructions,
+        questionBank: exam.questionBank,
+        totalQuestions: exam.totalQuestions,
+        totalMarks: exam.totalMarks,
+        passingMarks: exam.passingMarks,
+        negativeMarkingEnabled: exam.negativeMarkingEnabled,
+        negativeMarks: exam.negativeMarks,
+        randomizeQuestions: exam.randomizeQuestions,
+        randomizeOptions: exam.randomizeOptions,
+        allowResume: exam.allowResume,
         durationMinutes: exam.durationMinutes,
         maximumMarks: exam.maximumMarks,
-        passingMarks: exam.passingMarks,
         negativeMarking: exam.negativeMarking,
         languages: exam.languages,
         status: "DRAFT",
@@ -111,6 +192,9 @@ export async function activateWorkflowPhase(examId: string, phaseId: string) {
   if (!phase) throw new AppError(404, "Workflow phase not found");
 
   return prisma.$transaction(async (tx) => {
+    const exam = await tx.examination.findUnique({ where: { id: examId } });
+    if (!exam) throw new AppError(404, "Examination not found");
+
     await tx.workflowPhase.updateMany({
       where: { examId },
       data: { status: "SCHEDULED" }
@@ -120,6 +204,13 @@ export async function activateWorkflowPhase(examId: string, phaseId: string) {
       where: { id: phaseId },
       data: { status: "OPEN" }
     });
+
+    if (activated.name === "Online Examination") {
+      await tx.examination.update({
+        where: { id: examId },
+        data: { status: "ONLINE", onlineAt: new Date() }
+      });
+    }
 
     await tx.auditLog.create({
       data: {
@@ -139,7 +230,7 @@ export async function activateWorkflowPhase(examId: string, phaseId: string) {
 export async function getCandidatePhaseSnapshot(examId?: string) {
   const exam = examId
     ? await prisma.examination.findUnique({ where: { id: examId }, include: { workflowPhases: { orderBy: { opensAt: "asc" } } } })
-    : await prisma.examination.findFirst({ where: { status: { in: ["OPEN", "ACTIVE"] } }, include: { workflowPhases: { orderBy: { opensAt: "asc" } } }, orderBy: { createdAt: "desc" } });
+    : await prisma.examination.findFirst({ where: { status: { in: ["ONLINE", "OPEN", "ACTIVE"] } }, include: { workflowPhases: { orderBy: { opensAt: "asc" } } }, orderBy: { createdAt: "desc" } });
 
   if (!exam) throw new AppError(404, "No active examination found");
 
@@ -153,14 +244,30 @@ export async function getCandidatePhaseSnapshot(examId?: string) {
     documentVerification: normalized.includes("document"),
     eligibilityVerification: normalized.includes("eligibility"),
     hallTicket: normalized.includes("hall ticket"),
-    onlineExam: normalized.includes("online examination") || normalized.includes("examination"),
+    onlineExam: normalized.includes("online examination") && (exam.status === "ONLINE" || exam.status === "OPEN" || exam.status === "ACTIVE"),
     evaluation: normalized.includes("evaluation"),
     result: normalized.includes("result"),
     archiveDownloads: normalized.includes("archive")
   };
 
   return {
-    exam: { id: exam.id, code: exam.code, name: exam.name, durationMinutes: exam.durationMinutes },
+    exam: {
+      id: exam.id,
+      code: exam.code,
+      name: exam.name,
+      durationMinutes: exam.durationMinutes,
+      examName: exam.examName || exam.name,
+      examCode: exam.examCode || exam.code,
+      maximumAttempts: exam.maximumAttempts,
+      allowResume: exam.allowResume,
+      status: exam.status,
+      totalQuestions: exam.totalQuestions,
+      totalMarks: exam.totalMarks,
+      passingMarks: exam.passingMarks,
+      negativeMarkingEnabled: exam.negativeMarkingEnabled,
+      negativeMarks: exam.negativeMarks,
+      instructions: exam.instructions
+    },
     activePhase,
     access,
     phases: exam.workflowPhases

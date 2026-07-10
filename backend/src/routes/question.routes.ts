@@ -105,8 +105,9 @@ questionRoutes.post("/banks/import", authenticate, async (req: AuthRequest, res)
   res.status(201).json(imported);
 });
 
-questionRoutes.get("/online/active", async (_req, res) => {
-  const snapshot = await getCandidatePhaseSnapshot();
+questionRoutes.get("/online/active", async (req, res) => {
+  const examId = String(req.query.examId || "") || undefined;
+  const snapshot = await getCandidatePhaseSnapshot(examId);
   const questions = await prisma.question.findMany({
     where: { bank: { examId: snapshot.exam.id } },
     include: {
@@ -151,17 +152,32 @@ questionRoutes.post("/online/start", authenticate, async (req: AuthRequest, res)
   });
   if (!application) throw new AppError(404, "No application found for this examination");
 
-  const existing = await prisma.examSession.findFirst({
-    where: { applicationId: application.id, examId: snapshot.exam.id },
+  // Check attempt limit
+  const attemptCount = await prisma.examAttempt.count({
+    where: { studentId: candidate.id, examId: snapshot.exam.id }
+  });
+
+  if (attemptCount >= (snapshot.exam.maximumAttempts || 1)) {
+    throw new AppError(400, `Maximum attempt limit of ${snapshot.exam.maximumAttempts} reached for this exam.`);
+  }
+
+  // Check if there is an active session that is started but not submitted
+  const activeSession = await prisma.examSession.findFirst({
+    where: { applicationId: application.id, examId: snapshot.exam.id, status: "STARTED" },
     orderBy: { startedAt: "desc" }
   });
 
-  if (existing?.status === "SUBMITTED") {
-    const answered = await prisma.candidateResponse.count({ where: { sessionId: existing.id } });
-    return res.json({ sessionId: existing.id, startedAt: existing.startedAt, submittedAt: existing.submittedAt, submitted: true, answered });
+  if (activeSession) {
+    return res.json({
+      sessionId: activeSession.id,
+      startedAt: activeSession.startedAt ?? new Date(),
+      submitted: false,
+      resumed: true
+    });
   }
 
-  const session = existing ?? await prisma.examSession.create({
+  // Create a new session for the new attempt
+  const session = await prisma.examSession.create({
     data: {
       applicationId: application.id,
       examId: snapshot.exam.id,
@@ -170,14 +186,7 @@ questionRoutes.post("/online/start", authenticate, async (req: AuthRequest, res)
     }
   });
 
-  if (existing && existing.status !== "SUBMITTED") {
-    await prisma.examSession.update({
-      where: { id: existing.id },
-      data: { status: "STARTED", startedAt: existing.startedAt ?? new Date() }
-    });
-  }
-
-  res.status(existing ? 200 : 201).json({
+  res.status(201).json({
     sessionId: session.id,
     startedAt: session.startedAt ?? new Date(),
     submitted: false
@@ -201,57 +210,155 @@ questionRoutes.post("/online/submit", authenticate, async (req: AuthRequest, res
   const answers = req.body.answers && typeof req.body.answers === "object" ? req.body.answers as Record<string, string> : {};
   const marked = Array.isArray(req.body.marked) ? req.body.marked.map(String) : [];
 
-  const existing = await prisma.examSession.findFirst({
-    where: { applicationId: application.id, examId: snapshot.exam.id },
+  const session = await prisma.examSession.findFirst({
+    where: { applicationId: application.id, examId: snapshot.exam.id, status: "STARTED" },
     orderBy: { startedAt: "desc" }
   });
 
-  const session = existing?.status === "SUBMITTED"
-    ? existing
-    : existing ?? await prisma.examSession.create({
-        data: {
-          applicationId: application.id,
-          examId: snapshot.exam.id,
-          startedAt: new Date(),
-          status: "STARTED"
-        }
-      });
+  if (!session) {
+    throw new AppError(400, "No active exam session found to submit.");
+  }
 
-  if (existing?.status !== "SUBMITTED") {
-    await prisma.candidateResponse.deleteMany({ where: { sessionId: session.id } });
-    await prisma.examSession.update({
-      where: { id: session.id },
+  // Save the responses
+  await prisma.candidateResponse.deleteMany({ where: { sessionId: session.id } });
+  for (const [questionId, optionId] of Object.entries(answers)) {
+    await prisma.candidateResponse.create({
       data: {
-        submittedAt: new Date(),
-        status: "SUBMITTED"
+        sessionId: session.id,
+        questionId,
+        answer: { optionId },
+        marked: marked.includes(questionId)
       }
     });
   }
 
-  if (existing?.status !== "SUBMITTED") {
-    for (const [questionId, optionId] of Object.entries(answers)) {
-      await prisma.candidateResponse.create({
-        data: {
-          sessionId: session.id,
-          questionId,
-          answer: { optionId },
-          marked: marked.includes(questionId)
-        }
-      });
+  // Update session status
+  await prisma.examSession.update({
+    where: { id: session.id },
+    data: {
+      submittedAt: new Date(),
+      status: "SUBMITTED"
     }
+  });
 
-    await prisma.applicationHistory.create({
+  // Evaluate the answers
+  const questions = await prisma.question.findMany({
+    where: { bank: { examId: snapshot.exam.id } },
+    include: { options: true }
+  });
+
+  let score = 0;
+  for (const question of questions) {
+    const selectedOptionId = answers[question.id];
+    if (selectedOptionId) {
+      const option = question.options.find((o) => o.id === selectedOptionId);
+      if (option?.isCorrect) {
+        score += question.marks;
+      } else if (snapshot.exam.negativeMarkingEnabled) {
+        const penalty = question.negativeMarks || snapshot.exam.negativeMarks || 0;
+        score -= Math.abs(penalty);
+      }
+    }
+  }
+  score = Math.max(0, score);
+
+  const totalMarks = snapshot.exam.totalMarks || questions.reduce((acc, q) => acc + q.marks, 0) || 100;
+  const percentage = (score / totalMarks) * 100;
+  const resultStatus = score >= (snapshot.exam.passingMarks || 40) ? "PASS" : "FAIL";
+
+  const attemptCount = await prisma.examAttempt.count({
+    where: { studentId: candidate.id, examId: snapshot.exam.id }
+  });
+  const attemptNumber = attemptCount + 1;
+  const timeTaken = Math.floor((new Date().getTime() - (session.startedAt || new Date()).getTime()) / 1000);
+
+  // Save Attempt
+  const attempt = await prisma.examAttempt.create({
+    data: {
+      attemptNumber,
+      studentId: candidate.id,
+      examId: snapshot.exam.id,
+      answers: answers as any,
+      submittedAt: new Date(),
+      timeTaken,
+      score,
+      percentage,
+      resultStatus,
+      evaluationStatus: "EVALUATED",
+      published: false
+    }
+  });
+
+  // Recalculate ranks for this exam
+  await recalculateAttemptsRanks(snapshot.exam.id);
+
+  // Add history log
+  await prisma.applicationHistory.create({
+    data: {
+      applicationId: application.id,
+      status: `EXAM_ATTEMPT_${attemptNumber}`,
+      remarks: `Attempt ${attemptNumber} submitted and evaluated. Score: ${score}`
+    }
+  });
+
+  // Get the rank
+  const updatedAttempt = await prisma.examAttempt.findUniqueOrThrow({
+    where: { id: attempt.id }
+  });
+
+  const existingResult = await prisma.result.findUnique({
+    where: { applicationId: application.id }
+  });
+
+  if (!existingResult) {
+    await prisma.result.create({
       data: {
         applicationId: application.id,
-        status: "EXAM_SUBMITTED",
-        remarks: `Online examination submitted with ${Object.keys(answers).length} answer(s)`
+        examId: snapshot.exam.id,
+        marks: score,
+        percentage,
+        rank: updatedAttempt.rank || 0,
+        percentile: percentage,
+        qualified: resultStatus === "PASS",
+        status: "DRAFT"
       }
     });
   }
 
-  const answered = existing?.status === "SUBMITTED"
-    ? await prisma.candidateResponse.count({ where: { sessionId: session.id } })
-    : Object.keys(answers).length;
-
-  res.status(existing?.status === "SUBMITTED" ? 200 : 201).json({ sessionId: session.id, submitted: true, answered });
+  res.status(201).json({
+    sessionId: session.id,
+    submitted: true,
+    attemptNumber,
+    score,
+    percentage,
+    answered: Object.keys(answers).length
+  });
 });
+
+async function recalculateAttemptsRanks(examId: string) {
+  const attempts = await prisma.examAttempt.findMany({
+    where: { examId },
+    orderBy: [
+      { score: "desc" },
+      { percentage: "desc" }
+    ]
+  });
+
+  const studentLatestAttempts = new Map<string, any>();
+  for (const attempt of attempts) {
+    if (!studentLatestAttempts.has(attempt.studentId)) {
+      studentLatestAttempts.set(attempt.studentId, attempt);
+    }
+  }
+
+  const rankedAttempts = Array.from(studentLatestAttempts.values())
+    .sort((a, b) => b.score - a.score || b.percentage - a.percentage);
+
+  for (const [index, attempt] of rankedAttempts.entries()) {
+    await prisma.examAttempt.update({
+      where: { id: attempt.id },
+      data: { rank: index + 1 }
+    });
+  }
+}
+

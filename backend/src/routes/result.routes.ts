@@ -36,46 +36,30 @@ async function evaluateApplications(examId?: string) {
 
   const evaluated = [];
   for (const application of applications) {
-    const session = await prisma.examSession.findFirst({
-      where: { applicationId: application.id, status: "SUBMITTED" },
-      include: {
-        responses: {
-          include: {
-            question: { include: { options: true } }
-          }
-        }
-      },
-      orderBy: { submittedAt: "desc" }
+    const latestAttempt = await prisma.examAttempt.findFirst({
+      where: { studentId: application.candidateId, examId: application.examinationId },
+      orderBy: { attemptNumber: "desc" }
     });
-    if (!session) continue;
+    if (!latestAttempt) continue;
 
-    let marks = 0;
-    let maximumMarks = 0;
-    for (const response of session.responses) {
-      maximumMarks += response.question.marks;
-      const answer = response.answer as { optionId?: string } | null;
-      const selected = response.question.options.find((option) => option.id === answer?.optionId);
-      marks += selected?.isCorrect ? response.question.marks : -Math.abs(response.question.negativeMarks || 0);
-    }
-
-    const percentage = maximumMarks ? Math.max(0, (marks / maximumMarks) * 100) : 0;
     const result = await prisma.result.upsert({
       where: { applicationId: application.id },
       create: {
         applicationId: application.id,
         examId: application.examinationId,
-        marks: Math.max(0, marks),
-        percentage,
-        rank: 0,
-        percentile: percentage,
-        qualified: percentage >= 40,
+        marks: latestAttempt.score,
+        percentage: latestAttempt.percentage,
+        rank: latestAttempt.rank || 0,
+        percentile: latestAttempt.percentage,
+        qualified: latestAttempt.resultStatus === "PASS",
         status: "DRAFT"
       },
       update: {
-        marks: Math.max(0, marks),
-        percentage,
-        percentile: percentage,
-        qualified: percentage >= 40
+        marks: latestAttempt.score,
+        percentage: latestAttempt.percentage,
+        rank: latestAttempt.rank || 0,
+        percentile: latestAttempt.percentage,
+        qualified: latestAttempt.resultStatus === "PASS"
       }
     });
     evaluated.push(result);
@@ -125,6 +109,21 @@ resultRoutes.get("/", authenticate, async (req, res) => {
     ...result,
     candidateName: candidateName(result.application),
     candidateEmail: result.application.candidate.user.email
+  })));
+});
+
+resultRoutes.get("/attempts", authenticate, async (req, res) => {
+  const examId = String(req.query.examId || "");
+  const attempts = await prisma.examAttempt.findMany({
+    where: { examId: examId || undefined },
+    include: { candidate: { include: { user: true } } },
+    orderBy: { submittedAt: "desc" }
+  });
+
+  res.json(attempts.map((attempt) => ({
+    ...attempt,
+    candidateName: attempt.candidate.user.name || attempt.candidate.user.email,
+    candidateEmail: attempt.candidate.user.email
   })));
 });
 
@@ -186,8 +185,103 @@ resultRoutes.post("/publish", authenticate, authorize("result:publish"), async (
     where: { examId },
     data: { status: "PUBLISHED" }
   });
+
+  const latestAttempts = await prisma.examAttempt.findMany({
+    where: { examId }
+  });
+
+  const studentLatestIds = new Map<string, string>();
+  for (const attempt of latestAttempts) {
+    const current = studentLatestIds.get(attempt.studentId);
+    if (!current || attempt.attemptNumber > latestAttempts.find(a => a.id === current)!.attemptNumber) {
+      studentLatestIds.set(attempt.studentId, attempt.id);
+    }
+  }
+
+  if (studentLatestIds.size > 0) {
+    await prisma.examAttempt.updateMany({
+      where: { id: { in: Array.from(studentLatestIds.values()) } },
+      data: { published: true }
+    });
+    await prisma.examAttempt.updateMany({
+      where: { examId, id: { notIn: Array.from(studentLatestIds.values()) } },
+      data: { published: false }
+    });
+  }
+
   const phase = await activateResultPublicationPhase(examId);
   res.json({ published: updated.count, activePhase: phase });
+});
+
+resultRoutes.post("/unpublish", authenticate, authorize("result:publish"), async (req, res) => {
+  const examId = String(req.body.examId || "");
+  if (!examId) return res.status(400).json({ message: "Select an examination before unpublishing results" });
+
+  const updated = await prisma.result.updateMany({
+    where: { examId },
+    data: { status: "DRAFT" }
+  });
+
+  await prisma.examAttempt.updateMany({
+    where: { examId },
+    data: { published: false }
+  });
+
+  const evalPhase = await prisma.workflowPhase.findFirst({
+    where: { examId, name: "Evaluation" }
+  });
+  let phase = null;
+  if (evalPhase) {
+    phase = await prisma.$transaction(async (tx) => {
+      await tx.workflowPhase.updateMany({
+        where: { examId },
+        data: { status: "SCHEDULED" }
+      });
+      return tx.workflowPhase.update({
+        where: { id: evalPhase.id },
+        data: { status: "OPEN" }
+      });
+    });
+  }
+
+  res.json({ unpublished: updated.count, activePhase: phase });
+});
+
+resultRoutes.post("/republish", authenticate, authorize("result:publish"), async (req, res) => {
+  const examId = String(req.body.examId || "");
+  if (!examId) return res.status(400).json({ message: "Select an examination before republishing results" });
+
+  const evaluated = await evaluateApplications(examId);
+  const updated = await prisma.result.updateMany({
+    where: { examId },
+    data: { status: "PUBLISHED" }
+  });
+
+  const latestAttempts = await prisma.examAttempt.findMany({
+    where: { examId }
+  });
+
+  const studentLatestIds = new Map<string, string>();
+  for (const attempt of latestAttempts) {
+    const current = studentLatestIds.get(attempt.studentId);
+    if (!current || attempt.attemptNumber > latestAttempts.find(a => a.id === current)!.attemptNumber) {
+      studentLatestIds.set(attempt.studentId, attempt.id);
+    }
+  }
+
+  if (studentLatestIds.size > 0) {
+    await prisma.examAttempt.updateMany({
+      where: { id: { in: Array.from(studentLatestIds.values()) } },
+      data: { published: true }
+    });
+    await prisma.examAttempt.updateMany({
+      where: { examId, id: { notIn: Array.from(studentLatestIds.values()) } },
+      data: { published: false }
+    });
+  }
+
+  const phase = await activateResultPublicationPhase(examId);
+  res.json({ republished: updated.count, activePhase: phase });
 });
 
 resultRoutes.get("/:id/score-card.pdf", authenticate, async (req, res) => {

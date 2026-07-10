@@ -40,6 +40,7 @@ model Candidate {
   user         User              @relation(fields: [userId], references: [id])
   profile      CandidateProfile?
   applications Application[]
+  attempts     ExamAttempt[]
 }
 
 model CandidateProfile {
@@ -58,29 +59,55 @@ model CandidateProfile {
 }
 
 model Examination {
-  id              String                @id @default(cuid())
-  name            String
-  code            String                @unique
-  description     String?
-  department      String
-  durationMinutes Int
-  maximumMarks    Float
-  passingMarks    Float
-  negativeMarking Boolean               @default(false)
-  languages       String[]
-  maximumAttempts Int                   @default(1)
-  status          String                @default("DRAFT")
-  createdAt       DateTime              @default(now())
-  applications    Application[]
-  workflowPhases  WorkflowPhase[]
-  formTemplates   DynamicFormTemplate[]
-  eligibility     EligibilityRule[]
-  centres         ExamCentre[]
-  questionBanks   QuestionBank[]
-  hallTickets     HallTicket[]
-  sessions        ExamSession[]
-  results         Result[]
-  notifications   Notification[]
+  id                     String                @id @default(cuid())
+  name                   String
+  code                   String                @unique
+  examName               String?
+  examCode               String?               @unique
+  description            String?
+  department             String
+  course                 String?
+  semester               String?
+  subject                String?
+  examType               String?
+  examDate               DateTime?
+  startTime              String?
+  duration               Int?
+  instructions           String?
+  questionBank           String?
+  totalQuestions         Int?
+  totalMarks             Float?
+  passingMarks           Float
+  negativeMarkingEnabled Boolean               @default(false)
+  negativeMarks          Float?                @default(0.0)
+  randomizeQuestions     Boolean               @default(false)
+  randomizeOptions       Boolean               @default(false)
+  allowResume            Boolean               @default(false)
+  durationMinutes        Int
+  maximumMarks           Float
+  negativeMarking        Boolean               @default(false)
+  languages              String[]
+  maximumAttempts        Int                   @default(1)
+  status                 String                @default("DRAFT")
+  publishedAt            DateTime?
+  onlineAt               DateTime?
+  archivedAt             DateTime?
+  createdBy              String?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @default(now()) @updatedAt
+
+  // relations
+  applications           Application[]
+  workflowPhases         WorkflowPhase[]
+  formTemplates          DynamicFormTemplate[]
+  eligibility            EligibilityRule[]
+  centres                ExamCentre[]
+  questionBanks          QuestionBank[]
+  hallTickets            HallTicket[]
+  sessions               ExamSession[]
+  results                Result[]
+  notifications          Notification[]
+  attempts               ExamAttempt[]
 }
 
 model WorkflowPhase {
@@ -339,4 +366,25 @@ model SystemSetting {
   id    String @id @default(cuid())
   key   String @unique
   value Json
+}
+
+model ExamAttempt {
+  id               String      @id @default(cuid())
+  attemptNumber    Int
+  studentId        String
+  examId           String
+  answers          Json        // { questionId: optionId }
+  submittedAt      DateTime    @default(now())
+  timeTaken        Int         // in seconds
+  score            Float
+  percentage       Float
+  rank             Int?
+  resultStatus     String      // "PASS" or "FAIL"
+  evaluationStatus String      // "EVALUATED", "PENDING"
+  published        Boolean     @default(false)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  candidate        Candidate   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  examination      Examination @relation(fields: [examId], references: [id], onDelete: Cascade)
 }

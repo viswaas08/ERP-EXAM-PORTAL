@@ -1,12 +1,60 @@
 import { z } from "zod";
 
 export const examSchema = z.object({
-  name: z.string().min(3),
-  code: z.string().min(3),
+  name: z.string().min(3).optional(),
+  code: z.string().min(3).optional(),
+  examName: z.string().min(3),
+  examCode: z.string().min(3),
   department: z.string().min(2),
-  durationMinutes: z.number().int().positive(),
-  maximumMarks: z.number().positive(),
+  course: z.string().min(2),
+  semester: z.string().optional().nullable(),
+  subject: z.string().min(2),
+  examType: z.string().min(2),
+  examDate: z.string(), // Date string
+  startTime: z.string(),
+  duration: z.number().int().positive(),
+  instructions: z.string().optional().nullable(),
+  questionBank: z.string().optional().nullable(),
+  totalQuestions: z.number().int().positive(),
+  totalMarks: z.number().positive(),
   passingMarks: z.number().positive(),
-  negativeMarking: z.boolean().default(false),
-  languages: z.array(z.string()).default(["English"])
+  negativeMarkingEnabled: z.boolean().default(false),
+  negativeMarks: z.number().nonnegative().default(0.0),
+  randomizeQuestions: z.boolean().default(false),
+  randomizeOptions: z.boolean().default(false),
+  allowResume: z.boolean().default(false),
+  maximumAttempts: z.number().int().positive().default(1),
+  status: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional()
 });
+
+export const examUpdateSchema = z.object({
+  name: z.string().min(3).optional(),
+  code: z.string().min(3).optional(),
+  examName: z.string().min(3).optional(),
+  examCode: z.string().min(3).optional(),
+  department: z.string().min(2).optional(),
+  course: z.string().min(2).optional(),
+  semester: z.string().optional().nullable(),
+  subject: z.string().min(2).optional(),
+  examType: z.string().min(2).optional(),
+  examDate: z.string().optional(),
+  startTime: z.string().optional(),
+  duration: z.number().int().positive().optional(),
+  instructions: z.string().optional().nullable(),
+  questionBank: z.string().optional().nullable(),
+  totalQuestions: z.number().int().positive().optional(),
+  totalMarks: z.number().positive().optional(),
+  passingMarks: z.number().positive().optional(),
+  negativeMarkingEnabled: z.boolean().optional(),
+  negativeMarks: z.number().nonnegative().optional(),
+  randomizeQuestions: z.boolean().optional(),
+  randomizeOptions: z.boolean().optional(),
+  allowResume: z.boolean().optional(),
+  maximumAttempts: z.number().int().positive().optional(),
+  status: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional()
+});
+

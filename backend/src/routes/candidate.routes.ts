@@ -140,8 +140,12 @@ candidateRoutes.get("/dashboard", authenticate, async (req: AuthRequest, res) =>
 
   const phase = await getCandidatePhaseSnapshot(application?.examinationId);
   const profile = await prisma.candidateProfile.findUnique({ where: { candidateId: candidate.id } });
+  const attempts = await prisma.examAttempt.findMany({
+    where: { studentId: candidate.id },
+    orderBy: { attemptNumber: "desc" }
+  });
 
-  res.json({ profile, application, applications, phase });
+  res.json({ profile, application, applications, phase, attempts });
 });
 
 candidateRoutes.post("/registration", authenticate, async (req: AuthRequest, res) => {
