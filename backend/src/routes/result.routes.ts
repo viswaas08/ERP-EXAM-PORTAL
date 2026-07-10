@@ -78,7 +78,7 @@ async function evaluateApplications(examId?: string) {
 
 resultRoutes.get("/exams", authenticate, async (_req, res) => {
   const exams = await prisma.examination.findMany({
-    where: { status: { in: ["OPEN", "ACTIVE", "LIVE"] } },
+    where: { status: { in: ["OPEN", "ACTIVE", "LIVE", "PUBLISHED", "ONLINE", "COMPLETED", "RESULTS_PUBLISHED", "ARCHIVED", "DRAFT"] } },
     include: {
       workflowPhases: { orderBy: { opensAt: "asc" } },
       _count: { select: { applications: true, sessions: true, results: true } }
