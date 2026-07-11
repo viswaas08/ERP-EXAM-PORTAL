@@ -52,6 +52,7 @@ export function CandidateDashboard() {
   const [dashboard, setDashboard] = useState<CandidateDashboardData | null>(null);
   const [selectedApplicationNo, setSelectedApplicationNo] = usePersistentState("examPortal.candidateDashboard.selectedApplicationNo", "");
   const [calculationPolicy, setCalculationPolicy] = useState("latest"); // "latest" | "highest"
+  const [rankThreshold, setRankThreshold] = useState<number>(500);
 
   const applicationsRef = useRef<CandidateApplication[]>([]);
 
@@ -123,6 +124,16 @@ export function CandidateDashboard() {
         setSelectedPhaseName(snapshot.activePhase?.name ?? "");
       })
       .catch(() => undefined);
+
+    api<{ value: number | null }>(`/state/rankThreshold_${examId}`)
+      .then((res) => {
+        if (res.value !== null && !isNaN(Number(res.value))) {
+          setRankThreshold(Number(res.value));
+        } else {
+          setRankThreshold(500);
+        }
+      })
+      .catch(() => setRankThreshold(500));
   }, [selectedApplication?.examination.id]);
 
   const workflowPhases = phase.phases?.length ? phase.phases : fallbackWorkflow.map((name, index) => ({
@@ -156,7 +167,15 @@ export function CandidateDashboard() {
 
   const resultMessage = useMemo(() => {
     if (publishedResult) {
-      return `Final Score: ${publishedResult.marks} marks, Rank: #${publishedResult.rank}, Percentage: ${publishedResult.percentage.toFixed(1)}% (${publishedResult.qualified ? "Qualified / Pass" : "Not Qualified / Fail"}).`;
+      if (publishedResult.qualified) {
+        if (publishedResult.rank <= rankThreshold) {
+          return "you are eligible for the admission process pleasse procced with the instruction";
+        } else {
+          return "not eligible for the admission.";
+        }
+      } else {
+        return `Final Score: ${publishedResult.marks} marks, Rank: #${publishedResult.rank}, Percentage: ${publishedResult.percentage.toFixed(1)}% (Not Qualified / Fail).`;
+      }
     }
 
     if (!activeAttempt) {
@@ -166,7 +185,7 @@ export function CandidateDashboard() {
     }
     
     return "Result is awaiting publication from the administration.";
-  }, [activeAttempt, publishedResult, phase.access.result, phase.activePhase?.name]);
+  }, [activeAttempt, publishedResult, phase.access.result, phase.activePhase?.name, rankThreshold]);
 
   const hallTicketMessage = selectedApplication?.hallTicket
     ? `Roll No ${selectedApplication.hallTicket.rollNumber}, ${selectedApplication.hallTicket.centre.name}.`

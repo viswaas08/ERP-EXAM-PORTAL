@@ -75,6 +75,7 @@ export function Results() {
   const [exams, setExams] = useState<ExaminationRow[]>([]);
   const [selectedExamId, setSelectedExamId] = usePersistentState<string | undefined>("examPortal.examinations.selectedExamId", undefined);
   const [selectedSubmissionId, setSelectedSubmissionId] = usePersistentState("examPortal.results.selectedSubmissionId", "");
+  const [rankThreshold, setRankThreshold] = useState<number>(500);
 
   async function loadResults() {
     try {
@@ -82,6 +83,19 @@ export function Results() {
       const nextExamId = examRows.some((exam) => exam.id === selectedExamId) ? selectedExamId : examRows[0]?.id;
       if (nextExamId !== selectedExamId) {
         setSelectedExamId(nextExamId);
+      }
+
+      if (nextExamId) {
+        try {
+          const res = await api<{ value: number | null }>(`/state/rankThreshold_${nextExamId}`);
+          if (res.value !== null && !isNaN(Number(res.value))) {
+            setRankThreshold(Number(res.value));
+          } else {
+            setRankThreshold(500);
+          }
+        } catch {
+          setRankThreshold(500);
+        }
       }
 
       const query = nextExamId ? `?examId=${encodeURIComponent(nextExamId)}` : "";
@@ -108,6 +122,20 @@ export function Results() {
   useEffect(() => {
     void loadResults();
   }, [selectedExamId]);
+
+  async function handleThresholdChange(val: number) {
+    setRankThreshold(val);
+    if (selectedExamId) {
+      try {
+        await api(`/state/rankThreshold_${selectedExamId}`, {
+          method: "PUT",
+          body: JSON.stringify({ value: val })
+        });
+      } catch (err) {
+        console.error("Failed to save rank threshold:", err);
+      }
+    }
+  }
 
   const selectedSubmission = useMemo(() => submissions.find((item) => item.id === selectedSubmissionId) ?? submissions[0] ?? null, [submissions, selectedSubmissionId]);
   const selectedExam = useMemo(() => exams.find((exam) => exam.id === selectedExamId) ?? null, [exams, selectedExamId]);
@@ -165,6 +193,18 @@ export function Results() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h1 className="text-2xl font-bold">Results Processing</h1><p className="text-sm text-slate-500">Calculate normalized scores, compile merit lists, and publish candidate score cards.</p></div>
         <div className="flex flex-wrap items-center gap-2">
+          {selectedExamId && (
+            <div className="flex items-center gap-2 border border-border rounded-md px-3 py-1.5 bg-card">
+              <span className="text-xs font-semibold text-slate-600">Rank Threshold:</span>
+              <input
+                type="number"
+                className="w-20 rounded border border-border px-2 py-1 text-sm bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary/25 outline-none font-bold"
+                value={rankThreshold}
+                onChange={(e) => handleThresholdChange(Number(e.target.value))}
+                min={1}
+              />
+            </div>
+          )}
           <Select className="min-w-56" value={selectedExamId ?? ""} onChange={(event) => setSelectedExamId(event.target.value || undefined)}>
             <option value="">Select live exam</option>
             {exams.map((exam) => <option key={exam.id} value={exam.id}>{exam.code} - {exam.name} ({exam.submissions} submitted)</option>)}
