@@ -174,7 +174,7 @@ export function CandidateDashboard() {
           return "not eligible for the admission.";
         }
       } else {
-        return `Final Score: ${publishedResult.marks} marks, Rank: #${publishedResult.rank}, Percentage: ${publishedResult.percentage.toFixed(1)}% (Not Qualified / Fail).`;
+        return "you are not eligible for the admission";
       }
     }
 
