@@ -5,9 +5,6 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("=== DATABASE INSPECTION ===");
   try {
-    const examsCount = await prisma.examination.count();
-    console.log(`Examinations: ${examsCount}`);
-
     const exams = await prisma.examination.findMany({
       select: { id: true, name: true, code: true }
     });
@@ -15,31 +12,23 @@ async function main() {
     console.log(JSON.stringify(exams, null, 2));
 
     const users = await prisma.user.findMany({
-      include: {
-        role: {
-          include: {
-            permissions: true
-          }
-        }
-      }
+      include: { candidate: true }
     });
     console.log("All users in database:");
     for (const u of users) {
-      console.log(`- User: ${u.email} | Role: ${u.role.name} | Permissions: ${u.role.permissions.map(p => p.code).join(", ")}`);
+      console.log(`- User: ${u.email} | Name: ${u.name} | Candidate ID: ${u.candidate?.id ?? "None"}`);
     }
 
-    const candidatesCount = await prisma.candidate.count();
-    console.log(`Candidates: ${candidatesCount}`);
-
-    const appsCount = await prisma.application.count();
-    console.log(`Applications: ${appsCount}`);
-
-    const settingsCount = await prisma.systemSetting.count();
-    console.log(`System Settings: ${settingsCount}`);
-
-    const settings = await prisma.systemSetting.findMany();
-    console.log("System Settings details:");
-    console.log(JSON.stringify(settings, null, 2));
+    const apps = await prisma.application.findMany({
+      include: {
+        candidate: { include: { user: true } },
+        examination: true
+      }
+    });
+    console.log("\nApplications details:");
+    for (const app of apps) {
+      console.log(`- AppNo: ${app.applicationNo} | Candidate Email: ${app.candidate.user.email} | Exam Code: ${app.examination.code} | Status: ${app.status}`);
+    }
 
   } catch (error) {
     console.error("Error inspecting database:", error);

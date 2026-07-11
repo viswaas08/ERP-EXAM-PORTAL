@@ -77,7 +77,7 @@ type ApiExam = {
 type QuestionBankOption = {
   id: string;
   name: string;
-  exam: { code: string };
+  exam: { code: string } | null;
   _count?: { questions: number };
 };
 
@@ -883,7 +883,7 @@ export function Examinations() {
                   <Select value={formQuestionBank} onChange={(e) => setFormQuestionBank(e.target.value)}>
                     {questionBanks.map((bank) => (
                       <option key={bank.id} value={bank.id}>
-                        {bank.exam.code} - {bank.name} ({bank._count?.questions ?? 0} Qs)
+                        {bank.exam?.code || "Unassigned"} - {bank.name} ({bank._count?.questions ?? 0} Qs)
                       </option>
                     ))}
                   </Select>
