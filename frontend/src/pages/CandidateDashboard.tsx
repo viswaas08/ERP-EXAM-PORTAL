@@ -375,7 +375,17 @@ export function CandidateDashboard() {
                   {publishedResult && (
                     <Button
                       className="bg-secondary text-xs px-2"
-                      onClick={() => downloadFile(`${selectedApplication.applicationNo}-score-card.txt`, `Score Card\nApplication: ${selectedApplication.applicationNo}\nExam: ${selectedApplication.examination.code}\nMarks: ${publishedResult.marks}\nPercentage: ${publishedResult.percentage.toFixed(2)}%\nRank: ${publishedResult.rank}\nResult: ${publishedResult.qualified ? "Qualified / Pass" : "Not Qualified / Fail"}`)}
+                      onClick={() => {
+                        const eligibility = publishedResult.qualified
+                          ? (publishedResult.rank <= rankThreshold
+                            ? "you are eligible for the admission process pleasse procced with the instruction"
+                            : "not eligible for the admission.")
+                          : "you are not eligible for the admission";
+                        downloadFile(
+                          `${selectedApplication.applicationNo}-score-card.txt`,
+                          `Score Card\nApplication: ${selectedApplication.applicationNo}\nExam: ${selectedApplication.examination.code}\nMarks: ${publishedResult.marks}\nPercentage: ${publishedResult.percentage.toFixed(2)}%\nRank: ${publishedResult.rank}\nResult: ${publishedResult.qualified ? "Qualified / Pass" : "Not Qualified / Fail"}\nAdmission Eligibility: ${eligibility}`
+                        );
+                      }}
                     >
                       Download Score
                     </Button>

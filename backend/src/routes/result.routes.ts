@@ -350,7 +350,23 @@ resultRoutes.get("/:id/score-card.pdf", authenticate, async (req, res) => {
     where: { id: String(req.params.id) },
     include: { application: { include: { candidate: { include: { user: true } }, examination: true } } }
   });
-  streamPortalPdf(res, "Score Card", result ? [
+
+  if (!result) {
+    return streamPortalPdf(res, "Score Card", [`Result ID: ${req.params.id}`, "Result not found"]);
+  }
+
+  const setting = await prisma.systemSetting.findUnique({
+    where: { key: `rankThreshold_${result.examId}` }
+  });
+  const rankThreshold = setting?.value !== null && setting?.value !== undefined && !isNaN(Number(setting.value)) ? Number(setting.value) : 500;
+
+  const eligibility = result.qualified
+    ? (result.rank <= rankThreshold
+      ? "you are eligible for the admission process pleasse procced with the instruction"
+      : "not eligible for the admission.")
+    : "you are not eligible for the admission";
+
+  streamPortalPdf(res, "Score Card", [
     `Application No: ${result.application.applicationNo}`,
     `Candidate: ${result.application.candidate.user.name}`,
     `Examination: ${result.application.examination.name}`,
@@ -358,6 +374,7 @@ resultRoutes.get("/:id/score-card.pdf", authenticate, async (req, res) => {
     `Percentage: ${result.percentage.toFixed(2)}`,
     `Rank: ${result.rank}`,
     `Qualified: ${result.qualified ? "Yes" : "No"}`,
-    `Status: ${result.status}`
-  ] : [`Result ID: ${req.params.id}`, "Result not found"]);
+    `Status: ${result.status}`,
+    `Admission Eligibility: ${eligibility}`
+  ]);
 });
